@@ -455,14 +455,22 @@ if(window.Sky)Sky.init(document.getElementById('fx'),document.getElementById('dr
 function skyRender(){var glass=S.theme==='glass'&&!!window.Sky;document.body.classList.toggle('th-glass',glass);var t0=nowMin(cur);
   if(glass){var D=DAYS[cur];Sky.set({scape:D.scape,lat:D.ll[0],lng:D.ll[1],at:skyAt(cur,t0),wx:skyWx(cur,t0)});Sky.on(true);Sky.poke()}
   else{if(window.Sky)Sky.on(false);sky(t0)}}
-var planAnim=true,lastTab='';
+var planAnim=true,lastTab='',arrFx=false;
+/* 「到了」之後：新畫面的字一個一個從模糊、放大、略低的位置浮上來，跟著水波的節奏，從上往下 */
+var FXSEL='.hd b,.hd span,.dial .lab,.dial .big,.dial .rem,.alert .lab,.alert b,.alert .why,.bind,.ref,.peek span,.peek b,.pb,.askbar span';
+function charFx(){if(window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches)return;var n=0;
+  app.querySelectorAll(FXSEL).forEach(function(el){if(el.closest('.roll'))return;var w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT,null),ts=[],x;
+    while(x=w.nextNode()){if(x.parentNode.closest('.roll,svg,.ch'))continue;if(x.nodeValue.trim())ts.push(x)}
+    ts.forEach(function(tn){var f=document.createDocumentFragment();Array.from(tn.nodeValue).forEach(function(c){if(/\s/.test(c)&&c!=='　'){f.appendChild(document.createTextNode(c));return}
+      var sp=document.createElement('span');sp.className='ch';sp.style.setProperty('--i',Math.min(n++,40));sp.textContent=c;f.appendChild(sp)});tn.parentNode.replaceChild(f,tn)})})}
 function render(){
   document.body.dataset.tab=G?'guest':tab;skyRender();
   if(G){tabsEl.hidden=true;app.innerHTML=vGuest();drawSheet();return}
   tabsEl.hidden=false;
   TABS.forEach(function(t,n){var b=tabsEl.children[n+1],on=tab===t[0];b.className=on?'on':'';if(on){b.setAttribute('aria-current','page');tabsEl.style.setProperty('--ti',n)}else b.removeAttribute('aria-current')});
   app.innerHTML=tab==='now'?vNow():tab==='plan'?vPlan():vMore();
-  if(tab!==lastTab){app.scrollTop=0;lastTab=tab} /* 頁面本身不捲，捲的是 #app；換分頁時回到最上面 */
+  if(tab!==lastTab){app.scrollTop=0;lastTab=tab}
+  if(arrFx){arrFx=false;charFx()} /* 頁面本身不捲，捲的是 #app；換分頁時回到最上面 */
   var a=document.getElementById('arc'),hd=document.getElementById('hdot'),rl=document.querySelector('.roll');
   lastBig=rl?rl.dataset.s:'';if(a)lastFrac=+a.dataset.f;
   requestAnimationFrame(function(){requestAnimationFrame(function(){
@@ -503,7 +511,7 @@ document.addEventListener('click',function(e){
   else if(d.tilt){DeviceOrientationEvent.requestPermission().then(function(r){tiltMsg=r==='granted'?'已開啟，傾斜手機看看':'沒有開啟（可以到 Safari 設定允許動作與方向）';render()},function(){tiltMsg='這裡無法開啟';render()})}
   else if(d.theme){S.theme=d.theme;save();vib();render()}
   else if(d.dwx){var di=DWX.map(function(x){return x[0]}).indexOf(S.dwx||'');S.dwx=DWX[(di+1)%DWX.length][0];save();render()}
-  else if(d.arrive){vib([12,40,18]);if(window.Sky&&Sky.sweep)Sky.sweep();S.here[i]={id:d.arrive,t:nowMin(i)};whatIf=null;save();paint()}
+  else if(d.arrive){vib([12,40,18]);var br=t.getBoundingClientRect();if(window.Sky&&Sky.drop)Sky.drop(br.left+br.width/2,br.top+br.height/2);arrFx=true;var de=document.documentElement;de.classList.add('vt-drop');setTimeout(function(){de.classList.remove('vt-drop')},900);S.here[i]={id:d.arrive,t:nowMin(i)};whatIf=null;save();paint()}
   else if(d.skipit){vib();S.drop[K(i,d.skipit)]=1;save();paint()}
   else if(d.ext){id=d.ext;k=K(i,id);var it=item(i,id),v=+d.v;if(v<0&&S.ext[k]>0)S.ext[k]=Math.max(0,S.ext[k]+v);else if(v<0){if(it.min!=null)S.cut[k]=1}else if(S.cut[k])delete S.cut[k];else S.ext[k]=(S.ext[k]||0)+v;save();render()}
   else if(d.rx){vib();var r=lastRx[+d.rx];if(r){applyRx(i,r);save();paint()}}

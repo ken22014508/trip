@@ -39,7 +39,7 @@ function compute(p){var r={};
    3. 合成（手機原生解析度）：玻璃面板、液態玻璃按鈕、窗上的水滴和霜、星星、雨絲雪花。
       霧面＝讀貼圖的模糊層；液態玻璃＝讀清楚的層再折射。所以按鈕邊緣是清楚的，天空每個像素只算一次。
    天氣、時間都是緩動過去的（下雨慢慢下起來，雨停水滴留在窗上慢慢乾）。 */
-var SWP=0,RIP={x:0,y:0,t:0,s:1},OPB=new Float32Array(24),FL={v:0,next:0},gl=null,GL_OK=false,PR={},RS=1,SR=.8,Q=0,sig='',clipC=new WeakMap(),radC=new WeakMap(),slow=0,lastT=0,lastSky=0,lastComp=0,A=null,T=null,jump=true;
+var SWP=0,DRP={x:0,y:0,t:0},RIP={x:0,y:0,t:0,s:1},OPB=new Float32Array(24),FL={v:0,next:0},gl=null,GL_OK=false,PR={},RS=1,SR=.8,Q=0,sig='',clipC=new WeakMap(),radC=new WeakMap(),slow=0,lastT=0,lastSky=0,lastComp=0,A=null,T=null,jump=true;
 var fbD,txD,DW=0,DH=0,fbS,txS,SW=0,SH=0,fbO,txO,wpc,wpx,wtex,wDirty=false,wAny=false,wLast=0,wN=0,wPrev=null,wDown=null,wMoved=false;
 var LQ='.opt:not(.ghost),.pb,.tile,.gb,.gb2,.chip,.ib,.pvw,.wxb,.bind,.mini,.days button,.askbar,.opt.ghost,.stepper,.tel';
 var GSEL='.dial,.opt:not(.ghost),.pb,.panel,.menu,.tile,.tonight,.strip,.askbar,.bind,.days button,.pv,.pvw,.wxb,.gb,.gb2,.opt.ghost,.chip,.ib,.mrow input,input[type=text],input[type=number],input[type=time],textarea,.stepper,.tel,.mini';
@@ -157,7 +157,7 @@ var DROP_FS=HEAD+['','uniform vec3 uDL;uniform sampler2D uWp;',
 ' vec2 c=Drops(uv,t,l0,uDL.y,uDL.z);vec2 e=vec2(.0016,0.);float cx=Drops(uv+e,t,l0,uDL.y,uDL.z).x;float cy=Drops(uv+e.yx,t,l0,uDL.y,uDL.z).x;',
 ' o=vec4(clamp(vec2(cx-c.x,-(cy-c.x))*2.+.5,0.,1.),c.x,c.y);}'].join('\n');
 var COMP_FS=HEAD+['',
-'uniform int uN;uniform vec4 uR[24];uniform vec4 uC[24];uniform float uRad[24];uniform vec4 uK[24];uniform float uWet,uMist,uFrost,uSR,uDay,uGy,uSwp;uniform float uOp[24];uniform vec4 uRip;uniform vec3 uDL;',
+'uniform int uN;uniform vec4 uR[24];uniform vec4 uC[24];uniform float uRad[24];uniform vec4 uK[24];uniform float uWet,uMist,uFrost,uSR,uDay,uGy,uSwp;uniform vec4 uDrop;uniform float uOp[24];uniform vec4 uRip;uniform vec3 uDL;',
 'uniform sampler2D uSky,uOcc,uWp,uDr;',
 'vec3 dec(vec3 v){v=min(pow(v,vec3(1.9)),vec3(.995));return -log(1.-v)/1.1;}',
 'vec2 tuv(vec2 p){return vec2(p.x/uV.x,1.-p.y/uV.y);}',
@@ -268,6 +268,11 @@ var COMP_FS=HEAD+['',
 ' vec2 dn=vec2(0.);float dm=0.,trl=0.;float wp=texture(uWp,p/uV).r;',
 /* 窗上的水：一次算，法線用螢幕導數（省掉兩次重算） */
 ' if(uDL.x+uDL.y+uDL.z>.002){vec4 D=texture(uDr,tuv(p));dn=(D.xy-.5)*.5;dm=D.z;trl=D.w;}',
+/* 「到了」：一滴水落在按鈕上，三圈水波往外擴散，經過的地方天空和玻璃都被折射，波峰亮、波谷暗，落點閃一下 */
+' float drw=0.,drf=0.;if(uDrop.z<1.8){vec2 dv=p-uDrop.xy;float rr=length(dv)+1e-3;',
+'  for(int k=0;k<3;k++){float age=uDrop.z-float(k)*.16;if(age<=0.)continue;float R=age*uV.y*.62;float w=26.+age*46.;float x=rr-R;',
+'   float env=exp(-x*x/(w*w))*pow(max(1.-age/1.6,0.),1.5)*(1.-float(k)*.3)*smoothstep(0.,30.,rr);float wv=sin(x/w*5.5)*env;dn+=dv/rr*wv*.075;drw+=wv;}',
+'  drf=exp(-rr*rr/1400.)*smoothstep(.35,0.,uDrop.z)*smoothstep(0.,.04,uDrop.z);}',
 ' float fogW=max(clamp(uWet*1.1,0.,1.)*(1.-trl*.9),uMist)*(1.-smoothstep(.1,.25,dm))*(1.-wp);',
 ' vec2 q=p+dn*240.;float gm,tk;vec3 col=world(q,fogW*3.4,gm,tk);',
 ' if(gm<.5)col+=stars(q)*(1.-fogW);',
@@ -283,10 +288,11 @@ var COMP_FS=HEAD+['',
 /* 「到了 / 走了」：一道帶一點彩虹色的光斜斜掃過所有玻璃，前緣略暗，白玻璃上也看得出來 */
 ' if(uSwp<1.&&gm>.01){float bp=(p.x/uV.x*.6+p.y/uV.y)*.62;float bd=bp-(uSwp*1.5-.25);float band=smoothstep(.1,0.,abs(bd));vec3 ir=.5+.5*cos(6.283*(bp*2.5+vec3(0.,.33,.67)));',
 '  col=col*(1.-.22*smoothstep(.16,.05,bd)*smoothstep(-.02,.05,bd)*gm)+mix(vec3(1.),ir,.55)*band*.45*gm*(1.-uSwp*.5);}',
+' col=col*(1.-max(-drw,0.)*.16)+vec3(1.,.99,.96)*(max(drw,0.)*.3+drf*.55);',
 ' col=col*(1.-max(-gRip,0.)*.22)+vec3(1.)*max(gRip,0.)*.28;',
 ' col+=vec3(.75,.82,.9)*rn*uRain*inG+vec3(1.)*sn*uSnow*inG*.85;',
 ' float dt=h21(gl_FragCoord.xy+fract(uT))/255.;o=vec4(col+dt,1.);}'].join('\n');
-var UN='uGy uSwp uOp uRip uScape uFlash uDay uDr uV uS uT uCov uRain uSnow uFog uNight uWind uTilt uLum uMoonPh uMoonV uSunV uSun uMoon uSunP uMoonP uN uR uC uRad uK uWet uMist uFrost uSR uDL uSky uOcc uWp'.split(' ');
+var UN='uGy uSwp uDrop uOp uRip uScape uFlash uDay uDr uV uS uT uCov uRain uSnow uFog uNight uWind uTilt uLum uMoonPh uMoonV uSunV uSun uMoon uSunP uMoonP uN uR uC uRad uK uWet uMist uFrost uSR uDL uSky uOcc uWp'.split(' ');
 function mkProg(fs){function sh(t,src){var x=gl.createShader(t);gl.shaderSource(x,src);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS)){console.warn(gl.getShaderInfoLog(x));return null}return x}
   var v=sh(gl.VERTEX_SHADER,VS),f=sh(gl.FRAGMENT_SHADER,fs);if(!v||!f)return null;var p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.bindAttribLocation(p,0,'a');gl.linkProgram(p);
   if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.warn(gl.getProgramInfoLog(p));return null}var u={};UN.forEach(function(k){u[k]=gl.getUniformLocation(p,k)});return {p:p,u:u}}
@@ -360,7 +366,7 @@ function setU(P,t){var u=P.u,a=A;gl.useProgram(P.p);
   gl.uniform3fv(u.uSun,dir(a.sunAz,a.sunAlt));gl.uniform3fv(u.uMoon,dir(a.moonAz,a.moonAlt));gl.uniform2f(u.uSunP,sx(a.sunAz),sy(a.sunAlt));gl.uniform2f(u.uMoonP,sx(a.moonAz),sy(a.moonAlt));
   gl.uniform1f(u.uCov,a.cov);gl.uniform1f(u.uRain,a.rainD);gl.uniform1f(u.uSnow,a.snow);gl.uniform1f(u.uFog,a.fog);gl.uniform1f(u.uNight,a.night);gl.uniform1f(u.uWind,a.wind);
   gl.uniform1f(u.uTilt,a.tiltW+(calm?0:(S.tiltS||0)*.45));gl.uniform1f(u.uLum,a.lum);gl.uniform1f(u.uMoonPh,S.r.moonPhase);gl.uniform1f(u.uMoonV,a.moonV);gl.uniform1f(u.uSunV,a.sunV);
-  gl.uniform1f(u.uWet,a.wet);gl.uniform1f(u.uMist,a.mist);gl.uniform1f(u.uFrost,a.frost);gl.uniform3f(u.uDL,a.dl0,a.dl1,a.dl2);gl.uniform1f(u.uSR,SR);gl.uniform1f(u.uDay,a.day);gl.uniform1f(u.uScape,S.scape||0);gl.uniform1f(u.uFlash,FL.v);gl.uniform1f(u.uGy,calm?0:S.tiltS||0);var now=performance.now();gl.uniform1f(u.uSwp,SWP?Math.min(1,(now-SWP)/900):1);
+  gl.uniform1f(u.uWet,a.wet);gl.uniform1f(u.uMist,a.mist);gl.uniform1f(u.uFrost,a.frost);gl.uniform3f(u.uDL,a.dl0,a.dl1,a.dl2);gl.uniform1f(u.uSR,SR);gl.uniform1f(u.uDay,a.day);gl.uniform1f(u.uScape,S.scape||0);gl.uniform1f(u.uFlash,FL.v);gl.uniform1f(u.uGy,calm?0:S.tiltS||0);var now=performance.now();gl.uniform1f(u.uSwp,SWP?Math.min(1,(now-SWP)/900):1);gl.uniform4f(u.uDrop,DRP.x,DRP.y,DRP.t?(now-DRP.t)/1000:9,1);
   gl.uniform4f(u.uRip,RIP.x,RIP.y,RIP.t?(now-RIP.t)/1000:9,RIP.s)}
 function drawSky(t){
   setU(PR.occ,t);gl.uniform1f(PR.occ.u.uS,1);gl.bindFramebuffer(gl.FRAMEBUFFER,fbO);gl.viewport(0,0,1,1);gl.drawArrays(gl.TRIANGLES,0,3);
@@ -393,7 +399,7 @@ function loop(ts){if(!on)return;raf=requestAnimationFrame(loop);if(++CK%20===0)c
     if(FL.dbl&&ts>FL.dbl){FL.v=.8;FL.dbl=0}}else FL.next=0;
   if(FL.v>0){FL.v=Math.max(0,FL.v-dt/220);jump=true}
   var anim=step(dt),ch=collect()||wDirty,wetA=A.dl0+A.dl1+A.dl2>.01||A.snow>.01||A.rainD>.05||A.frost>.01;
-  var fx=(SWP&&ts-SWP<950)||(RIP.t&&ts-RIP.t<1350)||document.body.classList.contains('intro')||(S.tiltS&&Math.abs(S.tiltS-(S.tiltP||0))>.005);S.tiltP=S.tiltS;if(fx)ch=true;
+  var fx=(SWP&&ts-SWP<950)||(DRP.t&&ts-DRP.t<1900)||(RIP.t&&ts-RIP.t<1350)||document.body.classList.contains('intro')||(S.tiltS&&Math.abs(S.tiltS-(S.tiltP||0))>.005);S.tiltP=S.tiltS;if(fx)ch=true;
   var skyInt=anim?33:(A.rainD>.05||A.snow>.01)?66:100,compInt=(anim||wetA)?33:66;
   var ns=jump||ts-lastSky>=skyInt;if(ns){drawSky(ts/1000);lastSky=ts;jump=false}
   if(ns||ch||ts-lastComp>=compInt){drawComp(ts/1000);lastComp=ts}}
@@ -427,6 +433,7 @@ return {
     return GL_OK},
   ok:function(){return GL_OK},
   sweep:function(){if(!calm)SWP=performance.now()},
+  drop:function(x,y){if(calm)return;DRP={x:x==null?innerWidth/2:x,y:y==null?innerHeight/2:y,t:performance.now()};poke()},
   set:function(p){if(typeof SunCalc==='undefined')return;S.scape=p.scape==='sea'?1:p.scape==='city'?2:0;var k=[p.scape,p.lat,p.lng,Math.round(p.at.getTime()/60000),JSON.stringify(p.wx||{})].join('|');
     if(k===S.k)return;S.k=k;S.r=compute(p);paintBody(S.r);T=targets(S.r);if(!A)step(0);if(!on||calm)poke()},
   poke:function(){if(on)requestAnimationFrame(poke)},
