@@ -81,8 +81,14 @@ function DK(i){return DAYS[i]?DAYS[i].id:'d'+i}
 function DI(id){for(var j=0;j<DAYS.length;j++)if(DAYS[j].id===id)return j;return -1}
 function K(i,id){return DK(i)+':'+id}
 /* 對調開關（有 days 的）：被對調的兩天都還沒開始（沒有任何紀錄、日期也還沒到）才能切。回傳鎖住的原因；空字串＝可以切 */
+/* 這天有沒有紀錄（到了、走了、不去、延長或縮短、試算的時間）。數值歸零的殘留不算 */
+function dayRec(id){var pre=id+':',has=function(f,ok){return Object.keys(S[f]||{}).some(function(k){return k.indexOf(pre)===0&&ok(S[f][k])})};
+  return has('done',function(v){return v!=null})||has('drop',Boolean)||has('ext',function(v){return v>0})||has('cut',Boolean)||has('pin',function(v){return v!=null})||!!S.here[id]}
+/* 清掉某幾天的紀錄（對調前用）：筆記和 Claude 查到的班次留著 */
+function clearDays(ids){ids.forEach(function(id){var pre=id+':';['done','drop','ext','cut','pin'].forEach(function(f){Object.keys(S[f]||{}).forEach(function(k){if(k.indexOf(pre)===0)delete S[f][k]})});
+  delete S.here[id];delete S.at[id];delete S.lastT[id];delete S.pv[id]});S.hist=S.hist.filter(function(h){return ids.indexOf(h.i)<0})}
 function swLock(s){if(!s.days)return '';var td=ymd(there());for(var n=0;n<2;n++){var x=s.days[n],id=DK(x),pre=id+':';
-    var rec=['done','drop','ext','cut','pin'].some(function(f){return Object.keys(S[f]||{}).some(function(k){return k.indexOf(pre)===0})})||S.here[id]||S.at[id]!=null;
+    var rec=dayRec(id);
     if(rec)return '第 '+(x+1)+' 天已經有紀錄，不能再對調';if(REH?REH.i===x:ymd(dayDate(x))<=td)return '第 '+(x+1)+' 天已經開始，不能再對調'}return ''}
 function item(i,id){return DAYS[i].items.filter(function(x){return x.id===id})[0]}
 function pname(i,p){return DAYS[i].places[p]}
@@ -438,7 +444,7 @@ function vMore(){var bk=backBtn();
      +(hk?'<a class="tel solo" href="tel:'+esc(hk.tel)+'"><span>今晚飯店</span><b class="num">'+esc(hk.tel)+'</b></a>':'')}
   if(sub==='prep'){var td=ymd(new Date());
     return '<header class="hd">'+bk+'<div><b>出發前</b></div></header>'
-     +'<div class="panel">'+SW.map(function(s){var lk=swLock(s);return '<div class="lbl">'+esc(s.name)+(lk?'<small>　🔒 '+esc(lk)+'</small>':'')+'</div><div class="chips">'+s.opts.map(function(o){return '<button data-sw="'+s.k+'" data-v="'+o[0]+'"'+(lk?' disabled':'')+' class="chip'+(S.sw[s.k]===o[0]?' on':'')+'" aria-pressed="'+(S.sw[s.k]===o[0])+'">'+esc(o[1])+'</button>'}).join('')+'</div>'}).join('')+'</div>'
+     +'<div class="panel">'+SW.map(function(s){var lk=swLock(s);return '<div class="lbl">'+esc(s.name)+(lk?'<small>　🔒 '+esc(lk)+'</small>':'')+'</div>'+(lk&&/紀錄/.test(lk)?'<div class="row"><button class="gb" data-swclr="'+s.k+'">清掉這兩天的紀錄</button></div>':'')+'<div class="chips">'+s.opts.map(function(o){return '<button data-sw="'+s.k+'" data-v="'+o[0]+'"'+(lk?' disabled':'')+' class="chip'+(S.sw[s.k]===o[0]?' on':'')+'" aria-pressed="'+(S.sw[s.k]===o[0])+'">'+esc(o[1])+'</button>'}).join('')+'</div>'}).join('')+'</div>'
      +'<div class="panel">'+TODOS.filter(shown).map(function(x){var dn=S.done[x.id]!=null;return {x:x,dn:dn,due:!dn&&x.date&&td>=x.date}})
        .sort(function(a,b){return (a.dn-b.dn)||(b.due-a.due)||((a.x.date||'9')<(b.x.date||'9')?-1:1)})
        .map(function(r){return '<label class="todo'+(r.due?' due':'')+(r.dn?' done':'')+'"><input type="checkbox" data-todo="'+r.x.id+'"'+(r.dn?' checked':'')+'><div>'+esc(r.x.t)+'<small>'+esc(r.x.when)+'</small></div></label>'}).join('')+'</div>'}
@@ -667,6 +673,8 @@ document.addEventListener('click',function(e){
     if(!r2){sh={t:'rtin',msg:'這段文字裡找不到班次（要有 #r= 開頭的那一行）。請 Claude 照 app 給的格式補上。'};render()}else{parseRt(r2);sh={t:'rt'};render()}}
   else if(d.rtclear){S.rt={};save();location.reload()}
   else if(d.trip){if(window.TripLock&&d.trip!==TripLock.current)TripLock.pick(d.trip)}
+  else if(d.swclr){var s1=SW.filter(function(x){return x.k===d.swclr})[0];if(!s1||!s1.days)return;
+    if(confirm('清掉第 '+(s1.days[0]+1)+'、'+(s1.days[1]+1)+' 天的到了、走了、不去、延長等紀錄？筆記會留著。清掉後就能對調。')){clearDays(s1.days.map(DK));save();render()}}
   else if(d.sw){var sw0=SW.filter(function(x){return x.k===d.sw})[0];if(sw0&&swLock(sw0))return;if(S.sw[d.sw]!==d.v){S.sw[d.sw]=d.v;save();location.reload()}}
   else if(d.sos){sosOpen=sosOpen===+d.sos?-1:+d.sos;render()}
   else if(d.payer){[].forEach.call(document.querySelectorAll('#epc .chip'),function(b){var on=b===t;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)})}
