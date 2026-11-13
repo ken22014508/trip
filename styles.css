@@ -649,3 +649,10 @@ body.locked #tabs,body.locked #fx,body.locked #drops{display:none}
 /* 整頁固定不動：html/body 不捲、不回彈，只有 #app 裡面捲。iPhone 就不會整頁被拉動或縮放，畫布和玻璃也不會跟著跑 */
 html,body{height:100%;overflow:hidden;overscroll-behavior:none}
 #app{position:fixed;top:0;bottom:0;left:0;right:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:none;box-sizing:border-box}
+.verb{background:none;border:0;color:inherit;font:inherit;padding:8px 16px}
+#diag{position:fixed;inset:0;z-index:3000;pointer-events:none}
+#diag .dg-line{position:fixed;left:0;right:0;bottom:0;height:3px;background:#f33}
+#diag .dg-scr{position:fixed;left:0;right:0;top:0;border:3px dashed #fc0;box-sizing:border-box}
+#diag .dg-box{position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top) + 10px);pointer-events:auto;background:rgba(0,0,0,.85);color:#fff;border-radius:14px;padding:12px 14px;font-size:13px;line-height:1.35}
+#diag table{width:100%;border-collapse:collapse;margin:6px 0}#diag th{text-align:left;font-weight:400;color:#aaa;padding:2px 8px 2px 0;white-space:nowrap}#diag td{font-family:ui-monospace,monospace;word-break:break-all}
+#diag p{margin:4px 0 8px;color:#fc0}#diag button{width:100%;height:40px;border:0;border-radius:20px;background:#fff;color:#000;font-weight:700}

@@ -379,9 +379,21 @@ function vMore(){var bk=backBtn();
    +(k0&&HOTELS[k0]?'<button class="tonight" data-desk="'+k0+'"><span>今晚住</span><b>'+esc(HOTELS[k0].jp)+'</b><i>給櫃檯看'+ico('chev')+'</i></button>':'')
    +'<div class="menu">'
    +'<button data-sheet="theme"><span>外觀<small>'+THEMES.filter(function(x){return x[0]===S.theme})[0][1]+'</small></span>'+ico('chev')+'</button>'
-   +it('prep','出發前')+it('data','紀錄和備份')+it('install','裝到主畫面')+'</div>'+'<p class="ver">版本 <span id="ver">'+esc(VER)+'</span></p>'}
+   +it('prep','出發前')+it('data','紀錄和備份')+it('install','裝到主畫面')+'</div>'+'<p class="ver"><button class="verb" data-diag="1">版本 <span id="ver">'+esc(VER)+'</span></button></p>'}
 /* 版本：顯示這台手機現在用的快取版號（sw.js 的 trip-vNN），確認新版有沒有生效 */
 var VER='…';try{caches.keys().then(function(ks){var k=ks.filter(function(x){return /^trip-v/.test(x)}).sort().pop();VER=k?k.replace('trip-',''):'未快取';var e=document.getElementById('ver');if(e)e.textContent=VER})}catch(e){VER='—'}
+/* 檢查畫面：點版號打開。列出手機實際回報的尺寸，截圖給 Claude 判斷底部那一條的原因。紅線＝網頁框的底，黃框＝整個螢幕 */
+function diag(){var old=document.getElementById('diag');if(old){old.remove();return}
+  function probe(css){var e=document.createElement('div');e.style.cssText='position:fixed;left:0;top:0;width:1px;visibility:hidden;'+css;document.body.appendChild(e);var r=e.getBoundingClientRect(),cs=getComputedStyle(e);var o={h:Math.round(r.height),pt:cs.paddingTop,pb:cs.paddingBottom};e.remove();return o}
+  var sa=probe('padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)'),vv=window.visualViewport,fr=document.getElementById('fx').getBoundingClientRect(),tb=document.getElementById('tabs').getBoundingClientRect();
+  var rows=[['版本',VER],['iOS',(navigator.userAgent.match(/OS (\d+[_\d]*)/)||[])[1]||navigator.userAgent.slice(0,40)],['主畫面模式',String(!!navigator.standalone)+' / '+(matchMedia('(display-mode: standalone)').matches?'standalone':'browser')],
+    ['螢幕 screen',screen.width+'×'+screen.height+'　dpr '+devicePixelRatio],['網頁框 inner',innerWidth+'×'+innerHeight],['outer',outerWidth+'×'+outerHeight],['html clientH',document.documentElement.clientHeight],
+    ['visualViewport',vv?Math.round(vv.width)+'×'+Math.round(vv.height)+'　上移 '+Math.round(vv.offsetTop)+'　縮放 '+vv.scale:'無'],['安全區 上/下',sa.pt+' / '+sa.pb],
+    ['100vh / svh / lvh / dvh',probe('height:100vh').h+' / '+probe('height:100svh').h+' / '+probe('height:100lvh').h+' / '+probe('height:100dvh').h],
+    ['天空畫布',Math.round(fr.top)+' → '+Math.round(fr.bottom)],['導覽列底',Math.round(tb.bottom)],['--fullh',getComputedStyle(document.documentElement).getPropertyValue('--fullh')],['html 底色',document.documentElement.style.backgroundColor||'(預設)'],['body',document.body.className]];
+  var d=document.createElement('div');d.id='diag';
+  d.innerHTML='<div class="dg-line"></div><div class="dg-scr" style="height:'+screen.height+'px"></div><div class="dg-box"><b>檢查畫面</b><table>'+rows.map(function(r){return '<tr><th>'+esc(r[0])+'</th><td>'+esc(String(r[1]))+'</td></tr>'}).join('')+'</table><p>紅線＝網頁框的底　黃框＝整個螢幕的高度</p><button data-diag="1">關閉</button></div>';
+  document.body.appendChild(d)}
 /* ---------- 底部面板 ---------- */
 var chg=null,tiltMsg=''; /* 「計畫有變」裡正在看的結果 */
 function sheetHtml(){if(!sh)return '';var i=cur,D=DAYS[i],h='';
@@ -507,6 +519,7 @@ document.addEventListener('click',function(e){
     else if(d.chg==='undrop'){delete S.drop[K(i,id)];save();if(sh&&sh.t==='stop')sh=null}
     else if(d.chg==='go'&&chg&&chg.apply){vib();(chg.apply.drop||[]).forEach(function(x){S.drop[K(i,x)]=1});if(chg.apply.done)finish(i,chg.apply.done);save();chg=null;sh=null}
     render()}
+  else if(d.diag)diag()
   else if(d.lock){if(window.TripLock)TripLock.forget()}
   else if(d.sw){if(S.sw[d.sw]!==d.v){S.sw[d.sw]=d.v;save();location.reload()}}
   else if(d.sos){sosOpen=sosOpen===+d.sos?-1:+d.sos;render()}
