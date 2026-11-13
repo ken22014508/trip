@@ -593,24 +593,41 @@ if(window.Sky)Sky.init(document.getElementById('fx'),document.getElementById('dr
 function skyRender(){var glass=S.theme==='glass'&&!!window.Sky;document.body.classList.toggle('th-glass',glass);var t0=nowMin(cur);
   if(glass){var D=DAYS[cur];Sky.set({scape:D.scape,lat:D.ll[0],lng:D.ll[1],at:skyAt(cur,t0),wx:skyWx(cur,t0)});Sky.on(true);Sky.poke()}
   else{if(window.Sky)Sky.on(false);sky(t0)}}
-var planAnim=true,lastTab='',arrFx=false;
-/* 「到了」之後：新畫面的字一個一個從模糊、放大、略低的位置浮上來，跟著水波的節奏，從上往下 */
-var FXSEL='.hd b,.hd span,.dial .lab,.dial .big,.dial .rem,.alert .lab,.alert b,.alert .why,.bind,.ref,.peek span,.peek b,.pb,.askbar span';
-/* 「到了／走了」共用：水滴落在按下的按鈕上，換畫面時舊的模糊淡出、新的字逐字浮上來 */
-function dropFx(btn,ms){var br=btn.getBoundingClientRect();if(window.Sky&&Sky.drop)Sky.drop(br.left+br.width/2,br.top+br.height/2);arrFx=true;var de=document.documentElement;de.classList.add('vt-drop');setTimeout(function(){de.classList.remove('vt-drop')},ms)}
-function charFx(){if(window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches)return;var n=0;
-  app.querySelectorAll(FXSEL).forEach(function(el){if(el.closest('.roll'))return;var w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT,null),ts=[],x;
-    while(x=w.nextNode()){if(x.parentNode.closest('.roll,svg,.ch'))continue;if(x.nodeValue.trim())ts.push(x)}
-    ts.forEach(function(tn){var f=document.createDocumentFragment();Array.from(tn.nodeValue).forEach(function(c){if(/\s/.test(c)&&c!=='　'){f.appendChild(document.createTextNode(c));return}
-      var sp=document.createElement('span');sp.className='ch';sp.style.setProperty('--i',Math.min(n++,40));sp.textContent=c;f.appendChild(sp)});tn.parentNode.replaceChild(f,tn)})})}
+var planAnim=true,lastTab='',arrFx=null;
+/* D3「到了／走了」：水滴落在手指按的地方，波經過哪裡、哪裡的字才換。
+   換畫面前把 #app 複製一份疊在上面當舊畫面；每一塊的延遲＝離落點的距離 ÷ 波速（跟 sky.js 第一圈一樣：畫面高 × 0.62／秒），上限 0.9 秒。
+   位置和文字都沒變的塊不動畫；逐字浮現只留給轉盤的大字；不加模糊。減少動態效果時直接換。 */
+var lastPt=null;document.addEventListener('pointerdown',function(e){lastPt={x:e.clientX,y:e.clientY,t:Date.now()}},true);
+function dropFx(btn){var br=btn.getBoundingClientRect(),p=lastPt&&Date.now()-lastPt.t<1500?lastPt:{x:br.left+br.width/2,y:br.top+br.height/2};
+  if(window.Sky&&Sky.drop)Sky.drop(p.x,p.y);if(calm)return;arrFx={x:p.x,y:p.y,t0:performance.now(),v:Math.max(300,innerHeight*.62)}}
+function mkOld(){var o=app.cloneNode(true);o.classList.add('xold');o.setAttribute('aria-hidden','true');
+  o.querySelectorAll('[id]').forEach(function(e){e.removeAttribute('id')});o.querySelectorAll('.burst').forEach(function(e){e.classList.remove('burst')});
+  app.parentNode.insertBefore(o,app.nextSibling);o.scrollTop=app.scrollTop;document.body.classList.add('xfade');return o}
+function waveFx(fx,old){var now=performance.now(),BLK='.stage > :not(.hd), .hd > *',
+    del=function(e){var r=e.getBoundingClientRect(),d=Math.hypot(r.left+r.width/2-fx.x,r.top+r.height/2-fx.y)/fx.v-(now-fx.t0)/1000;return Math.max(0,Math.min(.9,d))},
+    sig=function(e){var r=e.getBoundingClientRect();return e.tagName+'.'+e.className+'|'+e.textContent.replace(/\s+/g,'')+'|'+Math.round(r.top)+'|'+Math.round(r.left)},
+    nb=[].slice.call(app.querySelectorAll(BLK)),ob=old?[].slice.call(old.querySelectorAll(BLK)):[],pool={},maxD=0,go=function(e,cls,d){e.style.setProperty('--wd',d.toFixed(3)+'s');e.classList.add(cls);maxD=Math.max(maxD,d)};
+  ob.forEach(function(e){var k=sig(e);(pool[k]=pool[k]||[]).push(e)});
+  nb.forEach(function(e){var m=(pool[sig(e)]||[]).shift();if(m){m.classList.add('same');return}
+    var d=del(e);
+    if(e.classList.contains('dial')){e.querySelectorAll('.lab,.rem').forEach(function(x){go(x,'wvi',d)});var bg=e.querySelector('.big');if(bg&&!bg.querySelector('.roll'))chars(bg,d);maxD=Math.max(maxD,d)}
+    else go(e,'wvi',d)});
+  ob.forEach(function(e){if(!e.classList.contains('same'))go(e,'wvo',del(e))});
+  if(old&&!ob.length)go(old,'wvo',.15);
+  setTimeout(function(){if(old&&old.parentNode)old.remove();document.body.classList.remove('xfade')},(maxD+.5)*1000)}
+/* 轉盤的大字：一個字一個字浮上來（沒有模糊） */
+function chars(el,d){var w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT,null),ts=[],x,n=0;while(x=w.nextNode()){if(x.parentNode.closest('.roll,svg'))continue;if(x.nodeValue.trim())ts.push(x)}
+  ts.forEach(function(tn){var f=document.createDocumentFragment();Array.from(tn.nodeValue).forEach(function(c){if(/\s/.test(c)&&c!=='　'){f.appendChild(document.createTextNode(c));return}
+    var sp=document.createElement('span');sp.className='ch';sp.style.setProperty('--i',Math.min(n++,20));sp.style.setProperty('--wd',d.toFixed(3)+'s');sp.textContent=c;f.appendChild(sp)});tn.parentNode.replaceChild(f,tn)})}
 function render(){
   document.body.dataset.tab=G?'guest':tab;skyRender();
   if(G){tabsEl.hidden=true;app.innerHTML=vGuest();drawSheet();return}
   tabsEl.hidden=false;
   TABS.forEach(function(t,n){var b=tabsEl.children[n+1],on=tab===t[0];b.className=on?'on':'';if(on){b.setAttribute('aria-current','page');tabsEl.style.setProperty('--ti',n)}else b.removeAttribute('aria-current')});
+  var oldEl=arrFx?mkOld():null;
   app.innerHTML=tab==='now'?vNow():tab==='plan'?vPlan():vMore();
   if(tab!==lastTab){app.scrollTop=0;lastTab=tab}
-  if(arrFx){arrFx=false;charFx()} /* 頁面本身不捲，捲的是 #app；換分頁時回到最上面 */
+  if(arrFx){var fx0=arrFx;arrFx=null;waveFx(fx0,oldEl)} /* 頁面本身不捲，捲的是 #app；換分頁時回到最上面 */
   var a=document.getElementById('arc'),hd=document.getElementById('hdot'),rl=document.querySelector('.roll');
   lastBig=rl?rl.dataset.s:'';if(a)lastFrac=+a.dataset.f;
   requestAnimationFrame(function(){requestAnimationFrame(function(){
@@ -620,7 +637,7 @@ function render(){
   drawSheet()}
 /* 使用者操作造成的重畫：支援的瀏覽器會有轉場 */
 var calm=window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches;
-function paint(){if(document.startViewTransition&&!calm&&sheet.hidden&&!sh){try{document.startViewTransition(render);return}catch(e){}}render()}
+function paint(){if(arrFx){render();return}if(document.startViewTransition&&!calm&&sheet.hidden&&!sh){try{document.startViewTransition(render);return}catch(e){}}render()}
 function copyFrom(id){var el=document.getElementById(id),m=document.getElementById('cpm');if(!el)return;
   function ok(){if(m)m.textContent='已複製'}function manual(){el.hidden=false;el.focus();el.select();if(m)m.textContent='已選取，長按複製'}
   try{navigator.clipboard.writeText(el.value).then(ok,manual)}catch(e){manual()}}

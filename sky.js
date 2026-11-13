@@ -331,7 +331,7 @@ function toLin(c){return c.map(function(v){v=Math.pow(clamp(v/255,0,.97),1.9);re
 function tintOf(el){if(el.matches('.opt.ai'))return toLin([52,138,190]);if(!el.matches('.pb'))return [0,0,0];var v=getComputedStyle(el).getPropertyValue('--c').trim()||getComputedStyle(el).getPropertyValue('--line').trim(),m;
   if(/^#[0-9a-f]{6}/i.test(v))m=hex(v);else if((m=v.match(/\d+(\.\d+)?/g)))m=m.slice(0,3).map(Number);else return [0,0,0];return toLin(m)}
 var RB=new Float32Array(NMAX*4),CB=new Float32Array(NMAX*4),RD=new Float32Array(NMAX),nR=0;
-function collect(){var els=document.querySelectorAll(GSEL),n=0,s='',fadeMode=document.body.classList.contains('intro')||document.body.classList.contains('lock');
+function collect(){var els=document.querySelectorAll(GSEL),n=0,s='',fadeMode=document.body.classList.contains('intro')||document.body.classList.contains('lock')||document.body.classList.contains('xfade');
   for(var k=0;k<els.length&&n<NMAX;k++){var el=els[k];if(el.matches(SOLID))continue;var r=el.getBoundingClientRect(),isD=el.classList&&el.classList.contains('dial');if(isD){var ins=r.width*.03;r={left:r.left+ins,top:r.top+ins,width:r.width-2*ins,height:r.height-2*ins,right:r.right-ins,bottom:r.bottom-ins}}if(r.width<4||r.height<4||r.bottom<0||r.top>H||r.right<0||r.left>W)continue;
     var cl=clipC.get(el);if(cl===undefined){cl=clipOf(el);clipC.set(el,cl)}var c=cl?cl.getBoundingClientRect():{left:-1e4,top:-1e4,right:1e4,bottom:1e4};
     if(r.right<c.left||r.left>c.right||r.bottom<c.top||r.top>c.bottom)continue;
