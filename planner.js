@@ -129,6 +129,8 @@ function Planner(day){
 function state(at,t,here,arr){return {here:here||null,arrT:arr?hm(arr):hm(t),at:at,t:hm(t),done:{},drop:{},cut:{},ext:{},pick:{}}}
 /* 套用行程開關：days 對調、項目／路段的 show 條件、走路路段自動雙向。app 和檢查工具共用這一份 */
 function prepare(DAYS,SW,sw){function shown(x){if(!x||!x.show)return true;var p=x.show.split('=');return p[1].split('|').indexOf(sw[p[0]])>=0}
+  /* 每天的 id（D1）：手機用它記進度，對調兩天時進度跟著那天的內容走。沒寫就用開關套用前的順序 d0、d1… */
+  DAYS.forEach(function(D,k){if(D.id==null)D.id='d'+k});
   (SW||[]).forEach(function(s){if(s.days&&sw[s.k]===s.on){var a=s.days[0],b=s.days[1],t=DAYS[a];DAYS[a]=DAYS[b];DAYS[b]=t}});
   DAYS.forEach(function(D){
     D.items=D.items.filter(shown);if(D.miss)D.miss=D.miss.filter(shown);

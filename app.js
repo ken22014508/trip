@@ -53,7 +53,7 @@ function realIdx(){var t=ymd(there());for(var i=0;i<DAYS.length;i++)if(ymd(dayDa
 function liveIdx(){return REH?REH.i:realIdx()}
 function isLive(i){return liveIdx()===i}
 function nowMin(i){if(isLive(i)){var d=REH?new Date():there();return d.getHours()*60+d.getMinutes()}
-  return S.pv[i]!=null?S.pv[i]:hm(DAYS[i].start||'09:30')}
+  return S.pv[DK(i)]!=null?S.pv[DK(i)]:hm(DAYS[i].start||'09:30')}
 function dlabel(i){var d=dayDate(i);return (d.getMonth()+1)+'/'+d.getDate()}
 
 /* ---------- 重排引擎的接線 ---------- */
@@ -61,24 +61,40 @@ function dlabel(i){var d=dayDate(i);return (d.getMonth()+1)+'/'+d.getDate()}
 function prepDays(){TripPlanner.prepare(DAYS,SW,S.sw)}
 prepDays();
 /* 3b：Claude 查到、使用者按過「套用」的班次（S.rt[天][起~終]），併進那天的路段。標成推估，畫面會寫「參考」 */
-function applyRt(){Object.keys(S.rt).forEach(function(i){var D=DAYS[i];if(!D)return;D.legs=D.legs||{};
-  Object.keys(S.rt[i]).forEach(function(lg){var L=D.legs[lg];if(!L)L=D.legs[lg]={name:'Claude 查到的班次',est:true,partial:true,runs:[]};
-    var have={};L.runs.forEach(function(r){have[r[0]]=1});S.rt[i][lg].forEach(function(r){if(!have[r[0]])L.runs.push(r)});
+/* D1 搬舊進度：舊版用「第幾天」當 key。用現在的開關狀態把第 i 天對到那天的 id；搬之前整包另存 TRIP.key+':bak'。演練進度直接重來 */
+function migrate(){if(S.v>=2)return;
+  if(!REH)try{localStorage.setItem(TRIP.key+':bak',JSON.stringify(S))}catch(e){}
+  var dk=function(x){return /^\d+$/.test(x)&&DAYS[+x]?DAYS[+x].id:x};
+  ['done','drop','ext','cut','pin'].forEach(function(n){var o=S[n]||{},r={};Object.keys(o).forEach(function(k){var m=/^(\d+):(.*)$/.exec(k);if(m){if(!REH)r[dk(m[1])+':'+m[2]]=o[k]}else r[k]=o[k]});S[n]=r});
+  ['at','lastT','here','pv','notes','rt'].forEach(function(n){var o=S[n]||{},r={};if(!REH)Object.keys(o).forEach(function(k){r[dk(k)]=o[k]});S[n]=r});
+  S.hist=REH?[]:(S.hist||[]).map(function(h){var m=/^(\d+):(.*)$/.exec(h.k||'');return Object.assign({},h,{i:dk(String(h.i)),k:m?dk(m[1])+':'+m[2]:h.k})});
+  S.v=2;save()}
+migrate();
+function applyRt(){Object.keys(S.rt).forEach(function(did){var i=DI(did),D=DAYS[i];if(!D)return;D.legs=D.legs||{};
+  Object.keys(S.rt[did]).forEach(function(lg){var L=D.legs[lg];if(!L)L=D.legs[lg]={name:'Claude 查到的班次',est:true,partial:true,runs:[]};
+    var have={};L.runs.forEach(function(r){have[r[0]]=1});S.rt[did][lg].forEach(function(r){if(!have[r[0]])L.runs.push(r)});
     L.runs.sort(function(a,b){return hm(a[0])-hm(b[0])});L.ai=true})})}
 applyRt();
 var PL=DAYS.map(function(d){return TripPlanner.Planner(d)});
-function K(i,id){return i+':'+id}
+/* D1：進度用每天的 id 記（DK），不再用第幾天；DI 反查那天現在排在第幾天 */
+function DK(i){return DAYS[i]?DAYS[i].id:'d'+i}
+function DI(id){for(var j=0;j<DAYS.length;j++)if(DAYS[j].id===id)return j;return -1}
+function K(i,id){return DK(i)+':'+id}
+/* 對調開關（有 days 的）：被對調的兩天都還沒開始（沒有任何紀錄、日期也還沒到）才能切。回傳鎖住的原因；空字串＝可以切 */
+function swLock(s){if(!s.days)return '';var td=ymd(there());for(var n=0;n<2;n++){var x=s.days[n],id=DK(x),pre=id+':';
+    var rec=['done','drop','ext','cut','pin'].some(function(f){return Object.keys(S[f]||{}).some(function(k){return k.indexOf(pre)===0})})||S.here[id]||S.at[id]!=null;
+    if(rec)return '第 '+(x+1)+' 天已經有紀錄，不能再對調';if(REH?REH.i===x:ymd(dayDate(x))<=td)return '第 '+(x+1)+' 天已經開始，不能再對調'}return ''}
 function item(i,id){return DAYS[i].items.filter(function(x){return x.id===id})[0]}
 function pname(i,p){return DAYS[i].places[p]}
 function navTo(i,p){return 'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent((DAYS[i].q&&DAYS[i].q[p])||pname(i,p))}
 function transitUrl(i,p){return navTo(i,p)+'&travelmode=transit'}
 /* 從存下來的操作，組出「現在的狀態」：在哪、幾點、哪些做完了 */
-function mkState(i){var D=DAYS[i],now=nowMin(i),st={at:S.at[i]||D.startAt,t:now,here:null,arrT:now,done:{},drop:{},cut:{},ext:{},pick:{}};
+function mkState(i){var D=DAYS[i],now=nowMin(i),st={at:S.at[DK(i)]||D.startAt,t:now,here:null,arrT:now,done:{},drop:{},cut:{},ext:{},pick:{}};
   D.items.forEach(function(x){var k=K(i,x.id);if(S.done[k]!=null)st.done[x.id]=1;if(S.drop[k])st.drop[x.id]=1;if(S.cut[k])st.cut[x.id]=1;if(S.ext[k])st.ext[x.id]=S.ext[k]});
-  var H=S.here[i];
+  var H=S.here[DK(i)];
   if(H&&!st.done[H.id]&&!st.drop[H.id]){st.here=H.id;st.at=item(i,H.id).place;st.arrT=H.t}
   else{/* 還沒按「到了」：照上次出發的時間算路上的計畫（一早還沒按過，就當作照預定時間出門）。到了沒，只有你按了才算 */
-    var l0=S.lastT[i]!=null?S.lastT[i]:TripPlanner.hm(D.start);if(l0>now)l0=now;st.t=l0}
+    var l0=S.lastT[DK(i)]!=null?S.lastT[DK(i)]:TripPlanner.hm(D.start);if(l0>now)l0=now;st.t=l0}
   st.order=passedOrder(i,st);
   return st}
 /* 已經走過頭、又想去的地方（還沒去、加回來）：插在後面還排得進去的位置；哪裡都排不進去就照原順序，畫面會讓你選不去 */
@@ -155,7 +171,7 @@ function say(m){var i=m.i,now=m.now,tg=m.tg,o={st:'go'};
   if(m.E&&m.E.gap&&!m.H.gap)o.ref=(o.ref?o.ref+'\n':'')+'之後去「'+m.E.gap.it.name+'」的路要現場查';
   return o}
 function applyRx(i,r){Object.keys(r.drop||{}).forEach(function(id){S.drop[K(i,id)]=1});Object.keys(r.cut||{}).forEach(function(id){S.cut[K(i,id)]=1})}
-function finish(i,id){var now=nowMin(i);S.hist.push({k:K(i,id),i:i,at:S.at[i]==null?null:S.at[i],last:S.lastT[i]==null?null:S.lastT[i],here:S.here[i]||null});if(S.hist.length>60)S.hist.shift();S.done[K(i,id)]=now>1?now:2;S.at[i]=item(i,id).place;S.lastT[i]=now;delete S.here[i];delete S.pin[K(i,id)]}
+function finish(i,id){var now=nowMin(i);S.hist.push({k:K(i,id),i:DK(i),at:S.at[DK(i)]==null?null:S.at[DK(i)],last:S.lastT[DK(i)]==null?null:S.lastT[DK(i)],here:S.here[DK(i)]||null});if(S.hist.length>60)S.hist.shift();S.done[K(i,id)]=now>1?now:2;S.at[DK(i)]=item(i,id).place;S.lastT[DK(i)]=now;delete S.here[DK(i)];delete S.pin[K(i,id)]}
 
 /* ---------- 定位：只用來顯示離目的地多遠 ---------- */
 var pos=null,posMsg='';
@@ -422,14 +438,14 @@ function vMore(){var bk=backBtn();
      +(hk?'<a class="tel solo" href="tel:'+esc(hk.tel)+'"><span>今晚飯店</span><b class="num">'+esc(hk.tel)+'</b></a>':'')}
   if(sub==='prep'){var td=ymd(new Date());
     return '<header class="hd">'+bk+'<div><b>出發前</b></div></header>'
-     +'<div class="panel">'+SW.map(function(s){return '<div class="lbl">'+esc(s.name)+'</div><div class="chips">'+s.opts.map(function(o){return '<button data-sw="'+s.k+'" data-v="'+o[0]+'" class="chip'+(S.sw[s.k]===o[0]?' on':'')+'" aria-pressed="'+(S.sw[s.k]===o[0])+'">'+esc(o[1])+'</button>'}).join('')+'</div>'}).join('')+'</div>'
+     +'<div class="panel">'+SW.map(function(s){var lk=swLock(s);return '<div class="lbl">'+esc(s.name)+(lk?'<small>　🔒 '+esc(lk)+'</small>':'')+'</div><div class="chips">'+s.opts.map(function(o){return '<button data-sw="'+s.k+'" data-v="'+o[0]+'"'+(lk?' disabled':'')+' class="chip'+(S.sw[s.k]===o[0]?' on':'')+'" aria-pressed="'+(S.sw[s.k]===o[0])+'">'+esc(o[1])+'</button>'}).join('')+'</div>'}).join('')+'</div>'
      +'<div class="panel">'+TODOS.filter(shown).map(function(x){var dn=S.done[x.id]!=null;return {x:x,dn:dn,due:!dn&&x.date&&td>=x.date}})
        .sort(function(a,b){return (a.dn-b.dn)||(b.due-a.due)||((a.x.date||'9')<(b.x.date||'9')?-1:1)})
        .map(function(r){return '<label class="todo'+(r.due?' due':'')+(r.dn?' done':'')+'"><input type="checkbox" data-todo="'+r.x.id+'"'+(r.dn?' checked':'')+'><div>'+esc(r.x.t)+'<small>'+esc(r.x.when)+'</small></div></label>'}).join('')+'</div>'}
-  if(sub==='data'){var log=DAYS.map(function(d,i){var rows=d.items.filter(function(x){return S.done[K(i,x.id)]>1}).map(function(x){return '  '+x.name+'：'+fmt(S.done[K(i,x.id)])+' 離開'});var n=S.notes[i]?'  筆記：'+S.notes[i]:'';return rows.length||n?d.name+'\n'+rows.concat(n?[n]:[]).join('\n'):''}).filter(Boolean).join('\n\n');
+  if(sub==='data'){var log=DAYS.map(function(d,i){var rows=d.items.filter(function(x){return S.done[K(i,x.id)]>1}).map(function(x){return '  '+x.name+'：'+fmt(S.done[K(i,x.id)])+' 離開'});var n=S.notes[DK(i)]?'  筆記：'+S.notes[DK(i)]:'';return rows.length||n?d.name+'\n'+rows.concat(n?[n]:[]).join('\n'):''}).filter(Boolean).join('\n\n');
     return '<header class="hd">'+bk+'<div><b>紀錄和備份</b></div></header>'
      +'<h2>實際時間和筆記</h2><textarea id="lg" readonly aria-label="實際紀錄">'+esc(log||'還沒有紀錄')+'</textarea><div class="row"><button class="gb" data-copy="lg">複製</button></div>'
-     +(Object.keys(S.rt).length?'<h2>Claude 查到的班次</h2><p class="sub">'+Object.keys(S.rt).map(function(k){return '第 '+(+k+1)+' 天 '+Object.keys(S.rt[k]).length+' 段'}).join('、')+'</p><div class="row"><button class="gb" data-rtclear="1">清掉，改回原本的班表</button></div>':'')
+     +(Object.keys(S.rt).length?'<h2>Claude 查到的班次</h2><p class="sub">'+Object.keys(S.rt).map(function(k){return '第 '+(DI(k)+1)+' 天 '+Object.keys(S.rt[k]).length+' 段'}).join('、')+'</p><div class="row"><button class="gb" data-rtclear="1">清掉，改回原本的班表</button></div>':'')
      +'<h2>重來</h2><div class="row"><button class="gb" data-reset="1">清掉今天的進度</button></div><h2>換手機</h2><textarea id="bk" class="mono" aria-label="備份資料">'+esc(JSON.stringify(S))+'</textarea><div class="row"><button class="gb" data-copy="bk">複製</button><button class="gb" data-imp="1">匯入</button><span class="sub" id="cpm"></span></div>'
      +(window.TripLock&&TripLock.sealed?'<h2>密碼</h2><p class="sub">這台手機記得行程密碼。借給別人或手機要送修前，可以先鎖起來，之後打開要重新輸入。</p><div class="row"><button class="gb" data-lock="1">鎖起來</button></div>':'')}
   if(sub==='askset'){var C=askCfg(),guess=(/^([^.]+)\.github\.io$/.exec(location.hostname)||[])[1];
@@ -529,7 +545,7 @@ function sheetHtml(){if(!sh)return '';var i=cur,D=DAYS[i],h='';
      +'<div class="grid"><button class="gb" data-close="1">不用</button><button class="gb pri" data-rtok="1">套用</button></div>'}
   if(sh.t==='wx')return '<div class="st">天氣</div>'+wxStrip(cur,nowMin(cur));
   if(sh.t==='miss'){var ms=(D.miss||[]).filter(shown);return '<div class="st">備案</div>'+(ms.length?ms.map(function(x){return '<div class="mi"><b>'+esc(x.b)+'</b><p>'+esc(x.d)+'</p></div>'}).join(''):'<p class="sub">這天沒有寫備案</p>')}
-  if(sh.t==='note')return '<div class="st">筆記</div><textarea id="note" aria-label="今天的筆記" placeholder="實際花多久、踩到什麼雷">'+esc(S.notes[cur]||'')+'</textarea>';
+  if(sh.t==='note')return '<div class="st">筆記</div><textarea id="note" aria-label="今天的筆記" placeholder="實際花多久、踩到什麼雷">'+esc(S.notes[DK(cur)]||'')+'</textarea>';
   if(sh.t==='rate')return '<div class="st">匯率</div><div class="row">1 '+TRIP.cur+' = <input type="number" id="rate" step="0.0001" value="'+S.rate+'" aria-label="匯率"> '+TRIP.home+'</div>'+MONEY_NOTES.map(function(n){return '<p class="sub">'+esc(n)+'</p>'}).join('');
   return ''}
 
@@ -600,26 +616,26 @@ document.addEventListener('click',function(e){
   else if(d.delm){S.mem=S.mem.filter(function(x){return x.id!==d.delm});save();render()}
   else if(d.addm){S.mem.push({id:'m'+Date.now().toString(36),n:'新成員',g:0});save();render()}
   else if(d.done){vib([12,40,18]);dropFx(t,1200);whatIf=null;id=d.done;var m0=vmOf(i),dl=document.querySelector('.dial'),fin=function(){
-      if(m0.st.here===id)finish(i,id);else S.here[i]={id:id,t:nowMin(i)};save();paint()};
+      if(m0.st.here===id)finish(i,id);else S.here[DK(i)]={id:id,t:nowMin(i)};save();paint()};
     if(dl&&!calm&&tab==='now'){dl.classList.add('burst');setTimeout(fin,260)}else fin()}
   else if(d.undo){k=K(i,d.undo);delete S.done[k];
     /* 是最後一次按的「走了」：退回那時候的位置 */
-    var hs=S.hist.filter(function(x){return x.i===i}),hl=hs[hs.length-1];
+    var hs=S.hist.filter(function(x){return x.i===DK(i)}),hl=hs[hs.length-1];
     if(hl&&hl.k===k){S.hist.splice(S.hist.lastIndexOf(hl),1);
-      if(hl.at==null)delete S.at[i];else S.at[i]=hl.at;if(hl.last==null)delete S.lastT[i];else S.lastT[i]=hl.last;
-      S.here[i]=hl.here||{id:d.undo,t:nowMin(i)}}
+      if(hl.at==null)delete S.at[DK(i)];else S.at[DK(i)]=hl.at;if(hl.last==null)delete S.lastT[DK(i)];else S.lastT[DK(i)]=hl.last;
+      S.here[DK(i)]=hl.here||{id:d.undo,t:nowMin(i)}}
     save();sh=null;render()}
   else if(d.tilt){DeviceOrientationEvent.requestPermission().then(function(r){tiltMsg=r==='granted'?'已開啟，傾斜手機看看':'沒有開啟（可以到 Safari 設定允許動作與方向）';render()},function(){tiltMsg='這裡無法開啟';render()})}
   else if(d.theme){S.theme=d.theme;save();vib();render()}
   else if(d.dwx){var di=DWX.map(function(x){return x[0]}).indexOf(S.dwx||'');S.dwx=DWX[(di+1)%DWX.length][0];save();render()}
-  else if(d.arrive){vib([12,40,18]);dropFx(t,900);S.here[i]={id:d.arrive,t:nowMin(i)};whatIf=null;save();paint()}
+  else if(d.arrive){vib([12,40,18]);dropFx(t,900);S.here[DK(i)]={id:d.arrive,t:nowMin(i)};whatIf=null;save();paint()}
   else if(d.skipit){vib();S.drop[K(i,d.skipit)]=1;save();paint()}
   else if(d.ext){id=d.ext;k=K(i,id);var it=item(i,id),v=+d.v;if(v<0&&S.ext[k]>0)S.ext[k]=Math.max(0,S.ext[k]+v);else if(v<0){if(it.min!=null)S.cut[k]=1}else if(S.cut[k])delete S.cut[k];else S.ext[k]=(S.ext[k]||0)+v;save();render()}
   else if(d.rx){vib();var r=lastRx[+d.rx];if(r){applyRx(i,r);save();paint()}}
   else if(d.wi){var m=vmOf(i);if(d.wi==='ok'&&m.st.here&&whatIf!=null){vib();S.pin[K(i,m.st.here)]=whatIf;save()}whatIf=null;render()}
   else if(d.chg){var mm=vmOf(i),P=mm.P,st=mm.st;id=d.id;
     if(d.chg==='back')chg=null;
-    else if(d.chg==='arrive'){S.here[i]={id:id,t:nowMin(i)};save();sh=null}
+    else if(d.chg==='arrive'){S.here[DK(i)]={id:id,t:nowMin(i)};save();sh=null}
     else if(d.chg==='early')chg={txt:P.early(st),apply:{done:st.here}};
     else if(d.chg==='goto'){var lost=[];for(var q=0;q<DAYS[i].items.length&&DAYS[i].items[q].id!==id;q++){var x=DAYS[i].items[q],kk=K(i,x.id);if(S.done[kk]==null&&!S.drop[kk]&&x.id!==st.here)lost.push(x.id)}
       chg={txt:P.goto(st,id),apply:{done:st.here,drop:lost}}}
@@ -633,7 +649,7 @@ document.addEventListener('click',function(e){
   else if(d.reh!=null){try{if(d.reh==='off'){localStorage.removeItem(RK);localStorage.removeItem(TRIP.key+':reh')}
       else{var seed={sw:S.sw,theme:S.theme,rate:S.rate,mem:S.mem,dwx:S.dwx||'clear'};localStorage.setItem(TRIP.key+':reh',JSON.stringify(seed));localStorage.setItem(RK,JSON.stringify({i:+d.reh,on:localYmd()}))}}catch(e){}
     location.reload()}
-  else if(d.rtok){if(RT&&RT.legs){var o2=S.rt[RT.d]=S.rt[RT.d]||{};Object.keys(RT.legs).forEach(function(lg){var have={};(o2[lg]=o2[lg]||[]).forEach(function(r){have[r[0]]=1});RT.legs[lg].forEach(function(r){if(!have[r[0]])o2[lg].push(r)})});save()}
+  else if(d.rtok){if(RT&&RT.legs){var o2=S.rt[DK(RT.d)]=S.rt[DK(RT.d)]||{};Object.keys(RT.legs).forEach(function(lg){var have={};(o2[lg]=o2[lg]||[]).forEach(function(r){have[r[0]]=1});RT.legs[lg].forEach(function(r){if(!have[r[0]])o2[lg].push(r)})});save()}
     clearHash();location.reload()}
   else if(d.askq){var qt=document.getElementById('askqt'),qq=(qt&&qt.value||'').trim();if(!qq){if(qt)qt.focus();return}
     if(askCfg())askStart(qq,null);else{window.open(askUrl(qq),'_blank','noopener');sh=null;render()}}
@@ -651,7 +667,7 @@ document.addEventListener('click',function(e){
     if(!r2){sh={t:'rtin',msg:'這段文字裡找不到班次（要有 #r= 開頭的那一行）。請 Claude 照 app 給的格式補上。'};render()}else{parseRt(r2);sh={t:'rt'};render()}}
   else if(d.rtclear){S.rt={};save();location.reload()}
   else if(d.trip){if(window.TripLock&&d.trip!==TripLock.current)TripLock.pick(d.trip)}
-  else if(d.sw){if(S.sw[d.sw]!==d.v){S.sw[d.sw]=d.v;save();location.reload()}}
+  else if(d.sw){var sw0=SW.filter(function(x){return x.k===d.sw})[0];if(sw0&&swLock(sw0))return;if(S.sw[d.sw]!==d.v){S.sw[d.sw]=d.v;save();location.reload()}}
   else if(d.sos){sosOpen=sosOpen===+d.sos?-1:+d.sos;render()}
   else if(d.payer){[].forEach.call(document.querySelectorAll('#epc .chip'),function(b){var on=b===t;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)})}
   else if(d.am){t.classList.toggle('on');t.setAttribute('aria-pressed',t.classList.contains('on'))}
@@ -672,8 +688,8 @@ document.addEventListener('change',function(e){var t=e.target;
   else if(t.id==='pv')render()});
 var deb=null;function later(){clearTimeout(deb);deb=setTimeout(save,600)}
 document.addEventListener('input',function(e){var t=e.target;
-  if(t.id==='pv'){S.pv[cur]=+t.value;t.style.setProperty('--pvp',(t.value/14.35).toFixed(1)+'%');document.getElementById('pvv').textContent=fmt(+t.value);later()}
-  else if(t.id==='note'){S.notes[cur]=t.value;later()}
+  if(t.id==='pv'){S.pv[DK(cur)]=+t.value;t.style.setProperty('--pvp',(t.value/14.35).toFixed(1)+'%');document.getElementById('pvv').textContent=fmt(+t.value);later()}
+  else if(t.id==='note'){S.notes[DK(cur)]=t.value;later()}
   else if(t.id==='rate'){if(+t.value>0){S.rate=+t.value;later()}}
   else if(t.id==='ea'){document.getElementById('cvo').textContent='≈ '+money((parseFloat(t.value)||0)*S.rate)+' '+TRIP.home}
   else if(t.id==='mt'||t.id==='mpl'){S.meet={time:document.getElementById('mt').value,place:document.getElementById('mpl').value};document.getElementById('gm').value=groupText();later()}
