@@ -8,11 +8,11 @@
 }
 @media (prefers-color-scheme:dark){:root{--bg:#0B121C;--surface:#152030;--ink:#EAF0F6;--sub:#93A4B8;--rule:#25344A;--line:#3DB4DA;--stop:#FF8073;--warn:#FFC233;--warn-bg:#3A2E0C;--stop-bg:#3B1814}}
 *{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%;background:#2C4F7C}
 body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.5 system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none}
 body.lock{overflow:hidden}
 body:not(.th-glass)[data-tab=now]{background:linear-gradient(180deg,var(--sky1,#101C30),var(--sky2,#1B2B45)) fixed}
-#fx{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;display:none}body.glgl #fx{display:block}
+#fx{position:fixed;inset:0;width:100%;height:100%;min-height:100lvh;z-index:0;pointer-events:none;display:none}body.glgl #fx{display:block}
 #app{position:relative;z-index:1}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer;border:0;background:none;padding:0}
@@ -356,7 +356,7 @@ a.rowb{text-decoration:none;flex-direction:column;align-items:flex-start;justify
 }
 
 /* ======================= 外觀：天空玻璃 ======================= */
-#drops{position:fixed;inset:0;width:100%;height:100%;z-index:850;pointer-events:none}
+#drops{position:fixed;inset:0;width:100%;height:100%;min-height:100lvh;z-index:850;pointer-events:none}
 .pvrow{display:flex;gap:8px;width:100%;align-items:center;margin-bottom:8px}.pvrow .pv{margin:0;flex:1}
 .pvw{flex:none;height:36px;min-width:52px;padding:0 12px;border-radius:18px;font-size:14px;font-weight:600}
 body.th-glass{
@@ -422,7 +422,8 @@ body.th-glass #app{text-shadow:0 1px 2px rgba(0,16,40,calc(.15 + .35*var(--lum,0
 body.th-glass .strip{background-color:rgba(8,16,32,calc(.32 + .35*var(--lum,0)))!important}
 
 /* 著色器玻璃：天空和玻璃都由 #fx 畫，DOM 面板只留文字和一條細邊 */
-body.th-glass.glgl{background:#000}
+/* 換畫面時瀏覽器會拍一張舊畫面的快照；底色用天空色，萬一快照沒拍到天空也不會黑一下 */
+body.th-glass.glgl{background:linear-gradient(180deg,var(--sky-z,#2C4F7C),var(--sky-h,#8FB3D9)) fixed}
 body.glgl :is(.pb,.panel,.menu,.tile,.tonight,.strip,.askbar,.bind,.days button,.pv,.pvw,.wxb,.gb,.gb2,.opt.ghost,.chip,.ib,.mrow input,input[type=text],input[type=number],input[type=time],textarea,.stepper,.tel,.mini):not(.chip.on,.days button.on,#sheet *){
   background:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;border-color:rgba(255,255,255,.16);box-shadow:none}
 body.glgl .stage.tight :is(.strip,.askbar,.bind){box-shadow:0 0 22px -4px rgba(255,194,51,.55)}

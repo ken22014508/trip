@@ -295,7 +295,7 @@ function mkTex(w,h,mip){var t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t)
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);return t}
 function mkFB(t){var f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
   var ok=gl.checkFramebufferStatus(gl.FRAMEBUFFER)===gl.FRAMEBUFFER_COMPLETE;gl.bindFramebuffer(gl.FRAMEBUFFER,null);return ok?f:null}
-function mkGL(c){try{gl=c.getContext('webgl2',{antialias:false,alpha:false,depth:false,stencil:false,preserveDrawingBuffer:false,powerPreference:'low-power'})}catch(e){gl=null}
+function mkGL(c){try{gl=c.getContext('webgl2',{antialias:false,alpha:false,depth:false,stencil:false,preserveDrawingBuffer:true,powerPreference:'low-power'})}catch(e){gl=null}
   if(!gl)return false;
   PR.occ=mkProg(OCC_FS);PR.sky=mkProg(SKY_FS);PR.comp=mkProg(COMP_FS);PR.drop=mkProg(DROP_FS);if(!PR.occ||!PR.sky||!PR.comp||!PR.drop){gl=null;return false}
   var b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
@@ -316,7 +316,7 @@ function sy(alt){var hz=H*.64;return hz-clamp(alt,-89,89)/75*hz}
 function dir(az,alt){az*=Math.PI/180;alt*=Math.PI/180;return [Math.sin(az)*Math.cos(alt),Math.sin(alt),Math.cos(az)*Math.cos(alt)]}
 /* 解析度：合成用手機原生（最多 2 倍），天空用低解析度。太慢時一級一級往下降 */
 var QL=[[2,.8],[1.5,.7],[1.25,.6],[1,.5]];
-function size(){if(!cv)return;DPR=window.devicePixelRatio||1;var q=QL[Q];RS=Math.min(DPR,q[0]);SR=Math.min(q[1],DPR*.5+.2);W=innerWidth;H=innerHeight;
+function size(){if(!cv)return;DPR=window.devicePixelRatio||1;var q=QL[Q];RS=Math.min(DPR,q[0]);SR=Math.min(q[1],DPR*.5+.2);W=cv.clientWidth||innerWidth;H=cv.clientHeight||innerHeight;LW=W;LH=H;
   cv.width=Math.round(W*RS);cv.height=Math.round(H*RS);drops.width=drops.height=1;
   if(gl){var w=Math.max(8,Math.round(W*SR)),h=Math.max(8,Math.round(H*SR));if(w!==SW||h!==SH){SW=w;SH=h;if(txS)gl.deleteTexture(txS);if(fbS)gl.deleteFramebuffer(fbS);txS=mkTex(SW,SH,true);fbS=mkFB(txS)}
     var dw=Math.max(8,Math.round(W*RS*.5)),dh=Math.max(8,Math.round(H*RS*.5));if(dw!==DW||dh!==DH){DW=dw;DH=dh;if(txD)gl.deleteTexture(txD);if(fbD)gl.deleteFramebuffer(fbD);txD=mkTex(DW,DH,false);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);fbD=mkFB(txD)}}
@@ -376,7 +376,8 @@ function drawComp(t){drawDrops(t);var P=PR.comp,u=P.u;setU(P,t);gl.uniform1f(u.u
   gl.uniform1i(u.uN,nR);if(nR){gl.uniform1fv(u.uOp,OPB);gl.uniform4fv(u.uR,RB);gl.uniform4fv(u.uC,CB);gl.uniform1fv(u.uRad,RD);gl.uniform4fv(u.uK,KB)}
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,cv.width,cv.height);gl.drawArrays(gl.TRIANGLES,0,3)}
 /* 省電分級：天氣在變、拖動、下雨下雪時全速；晴天靜止時天空每秒 10 張、合成看有沒有東西在動 */
-function loop(ts){if(!on)return;raf=requestAnimationFrame(loop);if(wpx)wipeDecay(ts);
+var LW=0,LH=0,CK=0;
+function loop(ts){if(!on)return;raf=requestAnimationFrame(loop);if(++CK%20===0)chk();if(wpx)wipeDecay(ts);
   var dt=lastT?Math.min(ts-lastT,100):16;
   if(lastT){slow=slow*.95+(dt>45?1:0)*.05;if(slow>.6&&Q<QL.length-1){Q++;slow=0;size()}}lastT=ts;
   /* 打雷：隨機 8～25 秒一次閃光（減少動態時不閃） */
@@ -388,7 +389,8 @@ function loop(ts){if(!on)return;raf=requestAnimationFrame(loop);if(wpx)wipeDecay
   var skyInt=anim?33:(A.rainD>.05||A.snow>.01)?66:100,compInt=(anim||wetA)?33:66;
   var ns=jump||ts-lastSky>=skyInt;if(ns){drawSky(ts/1000);lastSky=ts;jump=false}
   if(ns||ch||ts-lastComp>=compInt){drawComp(ts/1000);lastComp=ts}}
-function poke(){if(!gl||!S.r||!txS)return;if(!A||calm)step(0);collect();var t=performance.now()/1000;drawSky(t);drawComp(t)}
+function chk(){if(cv&&(cv.clientWidth!==LW||cv.clientHeight!==LH))size()}
+function poke(){if(!gl||!S.r||!txS)return;chk();if(!A||calm)step(0);collect();var t=performance.now()/1000;drawSky(t);drawComp(t)}
 function drawGlass(){}
 function paintBody(r){var b=document.body.style;b.setProperty('--sky-z',rgb(r.z));b.setProperty('--sky-h',rgb(r.h));
   /* 天空越亮，文字底下的暗襯越重，白天戶外也看得清 */
@@ -403,6 +405,7 @@ function paintBody(r){var b=document.body.style;b.setProperty('--sky-z',rgb(r.z)
 return {
   init:function(c,d){cv=c;drops=d;dctx=d.getContext('2d');S.tilt=0;glass=[];calm=!!(window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches);GL_OK=mkGL(c);size();
     addEventListener('resize',function(){size();poke()});
+    var rz=function(){size();poke()};if(window.visualViewport)visualViewport.addEventListener('resize',rz);addEventListener('orientationchange',function(){setTimeout(rz,300)});addEventListener('pageshow',rz);if(window.ResizeObserver)new ResizeObserver(rz).observe(cv);setTimeout(rz,400);setTimeout(rz,1200);
     addEventListener('scroll',function(){if(calm)poke()},true);
     addEventListener('pointerdown',function(e){pressEl=e.target.closest&&e.target.closest(LQ);var g=e.target.closest&&e.target.closest(GSEL);if(g&&!calm){RIP={x:e.clientX,y:e.clientY,t:performance.now(),s:pressEl?1:.6}}},true);
     ['pointerup','pointercancel','pointerleave'].forEach(function(k){addEventListener(k,function(){pressEl=null;wPrev=null},true)});
