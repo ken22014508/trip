@@ -71,7 +71,7 @@ function migrate(){if(S.v>=2)return;
   S.v=2;save()}
 migrate();
 function applyRt(){Object.keys(S.rt).forEach(function(did){var i=DI(did),D=DAYS[i];if(!D)return;D.legs=D.legs||{};
-  Object.keys(S.rt[did]).forEach(function(lg){var L=D.legs[lg];if(!L)L=D.legs[lg]={name:'Claude 查到的班次',est:true,partial:true,runs:[]};
+  Object.keys(S.rt[did]).forEach(function(lg){var ab=lg.split('>');if(!D.places||!D.places[ab[0]]||!D.places[ab[1]])return;var L=D.legs[lg];if(!L)L=D.legs[lg]={name:'Claude 查到的班次',est:true,partial:true,runs:[]};
     var have={};L.runs.forEach(function(r){have[r[0]]=1});S.rt[did][lg].forEach(function(r){if(!have[r[0]])L.runs.push(r)});
     L.runs.sort(function(a,b){return hm(a[0])-hm(b[0])});L.ai=true})})}
 applyRt();
@@ -91,6 +91,16 @@ function swLock(s){if(!s.days)return '';var td=ymd(there());for(var n=0;n<2;n++)
     var rec=dayRec(id);
     if(rec)return '第 '+(x+1)+' 天已經有紀錄，不能再對調';if(REH?REH.i===x:ymd(dayDate(x))<=td)return '第 '+(x+1)+' 天已經開始，不能再對調'}return ''}
 function item(i,id){return DAYS[i].items.filter(function(x){return x.id===id})[0]}
+/* D2：手機上的修改（蓋過發布的資料，要手動清才會消失）。對不上新資料的也列出來（bad），不靜靜丟掉 */
+function mods(){var L=[],dl=function(did){var i=DI(did);return i<0?{i:-1,lab:'找不到這天（'+did+'）'}:{i:i,lab:'第 '+(i+1)+' 天　'+DAYS[i].name}};
+  Object.keys(S.rt).forEach(function(did){var d=dl(did);Object.keys(S.rt[did]||{}).forEach(function(lg){var ab=lg.split('>'),P=d.i>=0?DAYS[d.i].places||{}:{},ok=d.i>=0&&P[ab[0]]&&P[ab[1]];
+    L.push({f:'rt',k:did+'|'+lg,day:d.lab,i:d.i,bad:!ok,t:(ok?P[ab[0]]+' → '+P[ab[1]]:lg.replace('>',' → '))+'：Claude 查到的班次',v:(S.rt[did][lg]||[]).map(function(r){return r[0]}).join('、')})})});
+  var each=function(f,txt){Object.keys(S[f]||{}).forEach(function(k){var v=S[f][k],m=/^(.*?):(.*)$/.exec(k);if(!m)return;
+    if(f==='ext'&&!(v>0)||f!=='pin'&&f!=='ext'&&!v||f==='pin'&&v==null)return;var d=dl(m[1]),it=d.i>=0?item(d.i,m[2]):null;
+    L.push({f:f,k:k,day:d.lab,i:d.i,bad:!it,t:'「'+(it?it.name:m[2])+'」'+txt(v),v:''})})};
+  each('ext',function(v){return '多待 '+v+' 分'});each('cut',function(){return '縮短到最短'});each('drop',function(){return '不去了'});each('pin',function(v){return '打算待到 '+fmt(v)});
+  L.sort(function(a,b){return (a.bad-b.bad)||((a.i<0?99:a.i)-(b.i<0?99:b.i))});return L}
+function modClear(f,k){if(f==='rt'){var p=k.split('|');if(S.rt[p[0]]){delete S.rt[p[0]][p[1]];if(!Object.keys(S.rt[p[0]]).length)delete S.rt[p[0]]}}else delete S[f][k]}
 function pname(i,p){return DAYS[i].places[p]}
 function navTo(i,p){return 'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent((DAYS[i].q&&DAYS[i].q[p])||pname(i,p))}
 function transitUrl(i,p){return navTo(i,p)+'&travelmode=transit'}
@@ -454,6 +464,13 @@ function vMore(){var bk=backBtn();
      +(Object.keys(S.rt).length?'<h2>Claude 查到的班次</h2><p class="sub">'+Object.keys(S.rt).map(function(k){return '第 '+(DI(k)+1)+' 天 '+Object.keys(S.rt[k]).length+' 段'}).join('、')+'</p><div class="row"><button class="gb" data-rtclear="1">清掉，改回原本的班表</button></div>':'')
      +'<h2>重來</h2><div class="row"><button class="gb" data-reset="1">清掉今天的進度</button></div><h2>換手機</h2><textarea id="bk" class="mono" aria-label="備份資料">'+esc(JSON.stringify(S))+'</textarea><div class="row"><button class="gb" data-copy="bk">複製</button><button class="gb" data-imp="1">匯入</button><span class="sub" id="cpm"></span></div>'
      +(window.TripLock&&TripLock.sealed?'<h2>密碼</h2><p class="sub">這台手機記得行程密碼。借給別人或手機要送修前，可以先鎖起來，之後打開要重新輸入。</p><div class="row"><button class="gb" data-lock="1">鎖起來</button></div>':'')}
+  if(sub==='mods'){var ML=mods(),bad=ML.filter(function(x){return x.bad}).length;
+    if(!ML.length)return '<header class="hd">'+bk+'<div><b>手機上的修改</b></div></header><p class="sub">沒有修改。行程完全照發布的資料。</p>';
+    var g='',last=null;ML.forEach(function(x,n){var hd=x.bad?'對不上（不會套用）':x.day;if(hd!==last){g+=(last!==null?'</div>':'')+'<h2>'+esc(hd)+'</h2><div class="panel">';last=hd}
+      g+='<div class="item"><span>'+esc(x.t)+(x.bad?'<small>'+esc(x.day)+'</small>':'')+(x.v?'<small class="num">'+esc(x.v)+'</small>':'')+'</span><button class="mini" data-modclr="'+n+'">清掉</button></div>'});
+    return '<header class="hd">'+bk+'<div><b>手機上的修改</b><span>'+ML.length+' 筆'+(bad?'，'+bad+' 筆對不上':'')+'</span></div></header>'
+     +'<p class="sub">這些是在這支手機上改的，會蓋過發布的行程資料，要清掉才會消失。出發前在家測試過的，記得看一眼清掉。</p>'+g+'</div>'
+     +'<div class="row"><button class="gb" data-modclr="all">全部清掉</button></div>'}
   if(sub==='askset'){var C=askCfg(),guess=(/^([^.]+)\.github\.io$/.exec(location.hostname)||[])[1];
     return '<header class="hd">'+bk+'<div><b>問 Claude 設定</b></div></header><p class="sub">設定好之後，「問 Claude」會留在 app 裡問，答案大約 2～3 分鐘後自己跳出來。權杖只存在這支手機，不會上傳。</p>'
      +'<div class="panel"><div class="lbl">私人 repo</div><input type="text" id="askrepo" value="'+esc(C?C.repo:(guess?guess+'/trip-ask':''))+'" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="私人 repo">'
@@ -478,7 +495,7 @@ function vMore(){var bk=backBtn();
    +(k0&&HOTELS[k0]?'<button class="tonight" data-desk="'+k0+'"><span>今晚住</span><b>'+esc(HOTELS[k0].jp)+'</b><i>給櫃檯看'+ico('chev')+'</i></button>':'')
    +'<div class="menu">'
    +'<button data-sheet="theme"><span>外觀<small>'+THEMES.filter(function(x){return x[0]===S.theme})[0][1]+'</small></span>'+ico('chev')+'</button>'
-   +it('prep','出發前')+it('askset','問 Claude 設定')+(realIdx()<0||REH?it('reh',REH?'演練中（第 '+(REH.i+1)+' 天）':'演練'):'')+((window.TripLock&&TripLock.trips.length>1)?it('trips','換行程'):'')+it('data','紀錄和備份')+it('install','裝到主畫面')+'</div>'+'<p class="ver"><button class="verb" data-diag="1">版本 <span id="ver">'+esc(VER)+'</span></button></p>'}
+   +it('prep','出發前')+(mods().length?it('mods','手機上的修改（'+mods().length+'）'):'')+it('askset','問 Claude 設定')+(realIdx()<0||REH?it('reh',REH?'演練中（第 '+(REH.i+1)+' 天）':'演練'):'')+((window.TripLock&&(TripLock.trips||[]).length>1)?it('trips','換行程'):'')+it('data','紀錄和備份')+it('install','裝到主畫面')+'</div>'+'<p class="ver"><button class="verb" data-diag="1">版本 <span id="ver">'+esc(VER)+'</span></button></p>'}
 /* 版本：顯示這台手機現在用的快取版號（sw.js 的 trip-vNN），確認新版有沒有生效 */
 var VER='…';try{caches.keys().then(function(ks){var k=ks.filter(function(x){return /^trip-v\d+$/.test(x)}).sort(function(a,b){return +a.slice(6)-+b.slice(6)}).pop();VER=k?k.replace('trip-',''):'未快取';var e=document.getElementById('ver');if(e)e.textContent=VER})}catch(e){VER='—'}
 /* 檢查畫面：點版號打開。列出手機實際回報的尺寸，截圖給 Claude 判斷底部那一條的原因。紅線＝網頁框的底，黃框＝整個螢幕 */
@@ -659,6 +676,10 @@ document.addEventListener('click',function(e){
     clearHash();location.reload()}
   else if(d.askq){var qt=document.getElementById('askqt'),qq=(qt&&qt.value||'').trim();if(!qq){if(qt)qt.focus();return}
     if(askCfg())askStart(qq,null);else{window.open(askUrl(qq),'_blank','noopener');sh=null;render()}}
+  else if(d.modclr!=null){var ML2=mods(),hasRt=false;
+    if(d.modclr==='all'){if(!confirm('清掉這支手機上全部 '+ML2.length+' 筆修改，回到發布的行程？'))return;ML2.forEach(function(x){if(x.f==='rt')hasRt=true;modClear(x.f,x.k)})}
+    else{var x2=ML2[+d.modclr];if(!x2)return;hasRt=x2.f==='rt';modClear(x2.f,x2.k)}
+    save();if(hasRt)location.reload();else render()}
   else if(d.askin){askStart(d.q,d.ex?d.ex.split(','):null)}
   else if(d.askdone){delete S.ask;save();sh=null;render()}
   else if(d.askr){var rr=S.ask&&S.ask.res&&(rtFrom(S.ask.res.r)||S.ask.res.r.replace(/^#?r=/,''));if(rr){parseRt(rr);sh={t:'rt'};render()}}
