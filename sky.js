@@ -316,7 +316,9 @@ function sy(alt){var hz=H*.64;return hz-clamp(alt,-89,89)/75*hz}
 function dir(az,alt){az*=Math.PI/180;alt*=Math.PI/180;return [Math.sin(az)*Math.cos(alt),Math.sin(alt),Math.cos(az)*Math.cos(alt)]}
 /* 解析度：合成用手機原生（最多 2 倍），天空用低解析度。太慢時一級一級往下降 */
 var QL=[[2,.8],[1.5,.7],[1.25,.6],[1,.5]];
-function size(){if(!cv)return;DPR=window.devicePixelRatio||1;var q=QL[Q];RS=Math.min(DPR,q[0]);SR=Math.min(q[1],DPR*.5+.2);W=cv.clientWidth||innerWidth;H=cv.clientHeight||innerHeight;LW=W;LH=H;
+/* 這台手機的螢幕高度（直拿取長邊、橫拿取短邊）。只在觸控裝置上用，電腦就照視窗大小 */
+function fullH(){var h=innerHeight;try{if(window.screen&&matchMedia('(pointer:coarse)').matches){var a=screen.width,b=screen.height;h=Math.max(h,innerWidth>innerHeight?Math.min(a,b):Math.max(a,b))}}catch(e){}document.documentElement.style.setProperty('--fullh',h+'px')}
+function size(){if(!cv)return;fullH();DPR=window.devicePixelRatio||1;var q=QL[Q];RS=Math.min(DPR,q[0]);SR=Math.min(q[1],DPR*.5+.2);W=cv.clientWidth||innerWidth;H=cv.clientHeight||innerHeight;LW=W;LH=H;
   cv.width=Math.round(W*RS);cv.height=Math.round(H*RS);drops.width=drops.height=1;
   if(gl){var w=Math.max(8,Math.round(W*SR)),h=Math.max(8,Math.round(H*SR));if(w!==SW||h!==SH){SW=w;SH=h;if(txS)gl.deleteTexture(txS);if(fbS)gl.deleteFramebuffer(fbS);txS=mkTex(SW,SH,true);fbS=mkFB(txS)}
     var dw=Math.max(8,Math.round(W*RS*.5)),dh=Math.max(8,Math.round(H*RS*.5));if(dw!==DW||dh!==DH){DW=dw;DH=dh;if(txD)gl.deleteTexture(txD);if(fbD)gl.deleteFramebuffer(fbD);txD=mkTex(DW,DH,false);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);fbD=mkFB(txD)}}

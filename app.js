@@ -379,7 +379,9 @@ function vMore(){var bk=backBtn();
    +(k0&&HOTELS[k0]?'<button class="tonight" data-desk="'+k0+'"><span>今晚住</span><b>'+esc(HOTELS[k0].jp)+'</b><i>給櫃檯看'+ico('chev')+'</i></button>':'')
    +'<div class="menu">'
    +'<button data-sheet="theme"><span>外觀<small>'+THEMES.filter(function(x){return x[0]===S.theme})[0][1]+'</small></span>'+ico('chev')+'</button>'
-   +it('prep','出發前')+it('data','紀錄和備份')+it('install','裝到主畫面')+'</div>'}
+   +it('prep','出發前')+it('data','紀錄和備份')+it('install','裝到主畫面')+'</div>'+'<p class="ver">版本 <span id="ver">'+esc(VER)+'</span></p>'}
+/* 版本：顯示這台手機現在用的快取版號（sw.js 的 trip-vNN），確認新版有沒有生效 */
+var VER='…';try{caches.keys().then(function(ks){var k=ks.filter(function(x){return /^trip-v/.test(x)}).sort().pop();VER=k?k.replace('trip-',''):'未快取';var e=document.getElementById('ver');if(e)e.textContent=VER})}catch(e){VER='—'}
 /* ---------- 底部面板 ---------- */
 var chg=null,tiltMsg=''; /* 「計畫有變」裡正在看的結果 */
 function sheetHtml(){if(!sh)return '';var i=cur,D=DAYS[i],h='';

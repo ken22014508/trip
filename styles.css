@@ -643,5 +643,6 @@ body.locked #tabs,body.locked #fx,body.locked #drops{display:none}
 .lockbox button{width:100%;height:52px;margin-top:12px;border:0;border-radius:26px;font-size:18px;font-weight:700;color:#0B1626;
   background:radial-gradient(90% 70% at 40% 20%,#fff,rgba(255,255,255,.75) 70%),#8FE0FF;box-shadow:inset 0 -2px 4px rgba(0,40,80,.2),0 6px 16px -6px rgba(0,10,30,.5)}
 .lockbox button:disabled{opacity:.7}
-/* iPhone 主畫面 app 有時回報的視窗高度比螢幕短（底部露出底色）。畫布從頂端往下多畫一截，蓋到螢幕最底；座標從頂端算，所以玻璃位置不受影響 */
-#fx,#drops{top:0;bottom:auto;height:calc(100vh + 160px);height:calc(100lvh + env(safe-area-inset-bottom) + 160px);min-height:0}
+/* iPhone 主畫面 app 有時回報的視窗高度比螢幕短（底部露出底色）。sky.js 把這台手機的螢幕高度寫進 --fullh，畫布從頂端畫到螢幕最底；座標從頂端算，玻璃位置不受影響 */
+#fx,#drops{top:0;bottom:auto;height:max(100lvh,var(--fullh,0px));min-height:0}
+.ver{text-align:center;font-size:12px;opacity:.55;margin:18px 0 0}
