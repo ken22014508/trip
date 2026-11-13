@@ -665,3 +665,30 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none}
   @keyframes vtOut{to{opacity:0;filter:blur(8px);transform:scale(1.025)}}
   @keyframes vtIn{from{opacity:0}}
 }
+/* ===== 給櫃檯看：跟其他面板一樣是磨砂玻璃，看得到後面的天空；字維持大而清楚 ===== */
+body.th-glass #sheet.full{background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.03)),rgba(12,22,40,.72);-webkit-backdrop-filter:blur(34px) saturate(170%);backdrop-filter:blur(34px) saturate(170%);color:#fff}
+body.th-glass.day #sheet.full{background:linear-gradient(180deg,rgba(255,255,255,.7),rgba(255,255,255,.5)),rgba(236,242,250,.55);color:#14233B}
+body.th-glass .desk{padding-top:calc(env(safe-area-inset-top) + 16px)}
+body.th-glass .desk .x{background:rgba(255,255,255,.16);color:inherit;box-shadow:inset 0 1px .5px rgba(255,255,255,.55),inset 0 0 0 .5px rgba(255,255,255,.25)}
+body.th-glass .desk .en,body.th-glass .desk .cd,body.th-glass .kv dt{color:rgba(255,255,255,.62)}
+body.th-glass.day .desk .en,body.th-glass.day .desk .cd,body.th-glass.day .kv dt{color:rgba(20,35,59,.6)}
+.desk .cds{display:grid;gap:10px;margin:4px 0 6px}
+body.th-glass .desk .cc,body.th-glass .desk .kv{background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.05));border-radius:22px;padding:14px 18px 12px;box-shadow:inset 0 1px .5px rgba(255,255,255,.55),inset 0 0 0 .5px rgba(255,255,255,.2)}
+body.th-glass.day .desk .cc,body.th-glass.day .desk .kv{background:rgba(255,255,255,.6);box-shadow:inset 0 1px .5px #fff,inset 0 0 0 .5px rgba(20,35,59,.1),0 6px 18px -10px rgba(20,35,59,.3)}
+body.th-glass .desk .cc .cd{margin:4px 0 0}
+body.th-glass .desk .kv{margin-top:10px;padding:16px 18px}
+
+/* ===== 怎麼去：一條時間線，左邊時間、中間站點和線、右邊小按鈕；不再一格一格的框 ===== */
+#sheet .hop{grid-template-columns:54px 1fr auto;gap:0 12px;padding:12px 0;border:0!important;background:none!important;box-shadow:none!important;border-radius:0!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+#sheet .hop .hl{text-align:right}
+#sheet .hop .hl b{font-size:19px}
+#sheet .hop .hb{position:relative;padding-left:20px;min-width:0}
+#sheet .hop .hb::before{content:"";position:absolute;left:0;top:5px;width:10px;height:10px;border-radius:50%;background:currentColor;opacity:.85}
+#sheet .hop .hb::after{content:"";position:absolute;left:4px;top:19px;bottom:-30px;width:2px;border-radius:1px;background:currentColor;opacity:.25}
+#sheet .hop:not(:has(+ .hop)) .hb::after{display:none}
+#sheet .hop.walk .hb::after{background:none;border-left:2px dotted currentColor;width:0}
+#sheet .hop .hb b{display:block;font-size:16px;line-height:1.3}
+#sheet .hop .hb span{margin-top:2px;line-height:1.35}
+#sheet .hop .mini{height:34px;padding:0 13px;font-size:14px;white-space:nowrap;align-self:center}
+#sheet .grid.one{grid-template-columns:1fr;margin-top:14px}
+#sheet .grid.one .gb{white-space:nowrap;justify-content:center}

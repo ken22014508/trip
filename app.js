@@ -399,7 +399,7 @@ var chg=null,tiltMsg=''; /* 「計畫有變」裡正在看的結果 */
 function sheetHtml(){if(!sh)return '';var i=cur,D=DAYS[i],h='';
   if(sh.t==='desk'){var H=HOTELS[sh.id];if(!H)return '';
     return '<div class="desk"><button class="ib x" data-close="1" aria-label="關閉">'+ico('x')+'</button><div class="jp">'+esc(H.jp)+'</div><div class="en">'+esc(H.en)+'</div>'
-     +H.codes.filter(shown).map(function(c){return '<div class="code">'+esc(c.c)+'</div><div class="cd">'+esc(c.d)+'</div>'}).join('')
+     +'<div class="cds">'+H.codes.filter(shown).map(function(c){return '<div class="cc"><div class="code">'+esc(c.c)+'</div><div class="cd">'+esc(c.d)+'</div></div>'}).join('')+'</div>'
      +'<dl class="kv"><dt>Name</dt><dd>'+esc(TRIP.who)+'</dd><dt>Check-in</dt><dd>'+esc(H.ci)+'</dd><dt>Check-out</dt><dd>'+esc(H.co)+'</dd><dt>Payment</dt><dd>'+esc(H.pay)+'</dd></dl></div>'}
   if(sh.t==='change'){var m=vmOf(i),st=m.st;
     h='<div class="st">計畫有變？</div>';
@@ -417,9 +417,9 @@ function sheetHtml(){if(!sh)return '';var i=cur,D=DAYS[i],h='';
     return h}
   if(sh.t==='route'){var mr=vmOf(i),nx=mr.next;if(!nx||!nx.ride)return '<div class="st">怎麼去</div><p class="sub">這段沒有路線資料</p>';
     h='<div class="ty">怎麼去</div><div class="st">'+esc(nx.it.name)+'</div>';
-    nx.ride.hops.forEach(function(hp){h+='<div class="hop"><div class="hl"><b class="num">'+(hp.walk?'':fmt(hp.dep))+'</b><span>'+(hp.walk?'':fmt(hp.arr)+' 到')+'</span></div><div class="hb"><b>'+esc(hp.how)+(hp.est?'（估）':'')+'</b><span>'+esc(pname(i,hp.from))+' → '+esc(pname(i,hp.to))+'</span></div>'
-      +'<a class="mini" href="'+navTo(i,hp.walk?hp.to:hp.from)+'" target="_blank" rel="noopener">'+(hp.walk?'導航':'去搭車處')+'</a></div>'});
-    return h+'<div class="grid"><a class="gb" href="'+transitUrl(i,nx.it.place)+'" target="_blank" rel="noopener">'+ico('nav')+'Google Maps 路線</a></div>'}
+    nx.ride.hops.forEach(function(hp){h+='<div class="hop'+(hp.walk?' walk':'')+'"><div class="hl"><b class="num">'+(hp.walk?'':fmt(hp.dep))+'</b><span>'+(hp.walk?'':fmt(hp.arr)+' 到')+'</span></div><div class="hb"><b>'+esc(hp.how)+(hp.est?'（估）':'')+'</b><span>'+esc(pname(i,hp.from))+' → '+esc(pname(i,hp.to))+'</span></div>'
+      +'<a class="mini" href="'+navTo(i,hp.walk?hp.to:hp.from)+'" target="_blank" rel="noopener">'+(hp.walk?'導航':'搭車處')+'</a></div>'});
+    return h+'<div class="grid one"><a class="gb" href="'+transitUrl(i,nx.it.place)+'" target="_blank" rel="noopener">'+ico('nav')+'Google Maps 路線</a></div>'}
   if(sh.t==='members'){h='<div class="st">成員和分組</div><p class="sub">同一組的人結清時算一個單位，例如同房或一家人。</p>';
     S.mem.forEach(function(x){h+='<div class="mrow"><input type="text" value="'+esc(x.n)+'" data-mid="'+x.id+'" aria-label="名字"><div class="chips">'+[0,1,2,3].map(function(g){return '<button class="chip'+(x.g===g?' on':'')+'" data-grp="'+x.id+':'+g+'" aria-pressed="'+(x.g===g)+'">'+(g?'第'+g+'組':'不分組')+'</button>'}).join('')+'</div>'
       +(memUsed(x.id)?'':'<button class="ib sm" data-delm="'+x.id+'" aria-label="移除 '+esc(x.n)+'">'+ico('x')+'</button>')+'</div>'});
