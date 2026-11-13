@@ -213,7 +213,10 @@ function readHash(){G=null;var m=/^#g=(.+)$/.exec(location.hash);if(!m)return;
 readHash();
 /* 3b：Claude 回答最後附的回傳連結 #r=<行程代號>/<第幾天>/<起>~<終>:0930-1005,1010-1045;<起>~<終>:… */
 var RT=null;
-function readRt(){RT=null;var m=/^#r=(.+)$/.exec(location.hash);if(!m)return;var raw=m[1];try{raw=decodeURIComponent(raw)}catch(e){}
+function readRt(){RT=null;var m=/^#r=(.+)$/.exec(location.hash);if(m)parseRt(m[1])}
+/* 從一段文字裡找出 #r=…（貼上 Claude 的整段回答也行）。iPhone 上點連結回不到主畫面 app，所以主要靠複製貼上 */
+function rtFrom(txt){var m=/#r=([^\s<>"'）)】」]+)/.exec(txt||'');return m?m[1]:null}
+function parseRt(raw){RT=null;try{raw=decodeURIComponent(raw)}catch(e){}raw=raw.replace(/[。.，,]+$/,'');
   var p=raw.split('/'),key=p[0],d=+p[1]-1,legs={},bad=[];
   if(p.length<3||!(d>=0)){RT={err:'連結的格式不對，請 Claude 照 app 給的格式重寫一次。'};return}
   if(key!==TRIP.key){var o=(window.TripLock&&TripLock.trips||[]).filter(function(t){return t.key===key})[0];RT={err:'這個連結是'+(o?'「'+o.title+'」':'另一趟行程')+'的，現在開的是「'+TRIP.title+'」。',other:o&&o.key};return}
@@ -305,9 +308,9 @@ function lastItem(i){var it=DAYS[i].items;return it[it.length-1]}
 function skipBtn(i,it){return it&&it.id!==lastItem(i).id?'<button class="opt ghost" data-skipit="'+it.id+'">不去「'+esc(it.name)+'」了</button>':''}
 function fixOpts(m){var i=m.i,h='';
   if(m.kind==='conf'){h=m.rx.length?m.rx.slice(0,3).map(function(o,n){return '<button class="opt" data-rx="'+n+'">'+esc(o.say)+'</button>'}).join('')
-      :(m.rx.fail||[]).map(function(f){return '<p class="gapp">'+esc(f)+'</p>'}).join('')+(m.is.it.fallback?'<p class="gapp">備案：'+esc(m.is.it.fallback)+'</p>':'')+skipBtn(i,m.is.it)+'<a class="opt ai" href="'+askUrl('這個情況我該怎麼辦？請查現在的班次。')+'" target="_blank" rel="noopener">問 Claude</a>'}
+      :(m.rx.fail||[]).map(function(f){return '<p class="gapp">'+esc(f)+'</p>'}).join('')+(m.is.it.fallback?'<p class="gapp">備案：'+esc(m.is.it.fallback)+'</p>':'')+skipBtn(i,m.is.it)+'<a class="opt ai" href="'+askUrl('這個情況我該怎麼辦？請查現在的班次。')+'" target="_blank" rel="noopener">問 Claude</a><button class="opt ghost" data-rtpaste="1">貼上 Claude 的回答</button>'}
   else if(m.kind==='gap'){var g=m.gap;h=(g.it.fallback?'<p class="gapp">備案：'+esc(g.it.fallback)+'</p>':'')+skipBtn(i,g.it)
-      +'<a class="opt ai" href="'+askUrl('我要從'+pname(i,g.from)+'去'+pname(i,g.it.place)+'，請查現在最近的班次和走法。',[g.from,g.it.place])+'" target="_blank" rel="noopener">問 Claude 查班次</a>'
+      +'<a class="opt ai" href="'+askUrl('我要從'+pname(i,g.from)+'去'+pname(i,g.it.place)+'，請查現在最近的班次和走法。',[g.from,g.it.place])+'" target="_blank" rel="noopener">問 Claude 查班次</a><button class="opt ghost" data-rtpaste="1">貼上 Claude 的回答</button>'
       +'<a class="opt ghost" href="'+transitUrl(i,g.it.place)+'" target="_blank" rel="noopener">用 Google Maps 查路線</a>'}
   return h?'<div class="opts">'+h+'</div>':''}
 function lostLine(m){return m.lost.length&&!m.wi?'<div class="ref lost">'+ico('skip')+'去不了了：'+esc(names(m.lost))+'</div>':''}
@@ -370,7 +373,7 @@ function groupText(){var D=DAYS[cur],m=S.meet,L=['【'+dlabel(cur)+' '+D.name+'�
   if(m.time||m.place)L.push('集合 '+(m.time||'')+' '+(m.place||''));L.push(shareUrl());return L.join('\n')}
 function askUrl(q,ex){var st=mkState(cur),txt=PL[cur].brief(st),PS=DAYS[cur].places||{},ks=Object.keys(PS);
   ex=ex||[ks[0]||'a',ks[1]||'b'];
-  var back='\n\n如果你查到具體的班次，回答最後另起一行，附上這個連結讓我點回 app（照格式填好，不要放在程式碼區塊裡）：\n'
+  var back='\n\n如果你查到具體的班次，回答最後另起一行，照下面的格式寫一行（我會複製整段回答貼回 app，不要放在程式碼區塊裡）：\n'
     +location.href.split('#')[0]+'#r='+TRIP.key+'/'+(cur+1)+'/起點代號~終點代號:出發-抵達,出發-抵達'
     +'\n例如 '+ex[0]+'~'+ex[1]+':0930-1005,1010-1045。時間用四位數字；好幾段就用分號隔開。只放你查得到、確定有開的班次。'
     +'\n地點代號：'+ks.map(function(k){return k+'＝'+PS[k]}).join('、');
@@ -473,6 +476,9 @@ function sheetHtml(){if(!sh)return '';var i=cur,D=DAYS[i],h='';
     THEMES.forEach(function(x){h+='<button class="rowb th'+(S.theme===x[0]?' on':'')+'" data-theme="'+x[0]+'" aria-pressed="'+(S.theme===x[0])+'"><b>'+x[1]+'</b><span>'+x[2]+'</span></button>'});
     if(S.theme==='glass'&&window.DeviceOrientationEvent&&typeof DeviceOrientationEvent.requestPermission==='function')h+='<div class="grid"><button class="gb" data-tilt="1">'+(tiltMsg||'傾斜手機時，玻璃的光跟著動')+'</button></div>';
     return h}
+  if(sh.t==='rtin')return '<div class="ty">Claude 查到的班次</div><div class="st">貼上 Claude 的回答</div><p class="sub">在 Claude 那邊按回答下面的「複製」，回來長按下面的框貼上。整段貼上就好，app 會自己找出班次。</p>'
+     +'<textarea id="rtin" rows="5" aria-label="貼上 Claude 的回答"></textarea>'+(sh.msg?'<p class="lt">'+esc(sh.msg)+'</p>':'')
+     +'<div class="grid"><button class="gb" data-close="1">取消</button><button class="gb pri" data-rtread="1">讀取</button></div>';
   if(sh.t==='rt'){if(!RT)return '';var P2=RT.d!=null?DAYS[RT.d].places:{};
     if(RT.err)return '<div class="ty">Claude 查到的班次</div><div class="st">沒辦法套用</div><p>'+esc(RT.err)+'</p>'+(RT.other?'<div class="grid one"><button class="gb pri" data-trip="'+esc(RT.other)+'">換到那趟</button></div>':'');
     return '<div class="ty">Claude 查到的班次</div><div class="st">第 '+(RT.d+1)+' 天　'+esc(DAYS[RT.d].name)+'</div>'
@@ -588,6 +594,10 @@ document.addEventListener('click',function(e){
     location.reload()}
   else if(d.rtok){if(RT&&RT.legs){var o2=S.rt[RT.d]=S.rt[RT.d]||{};Object.keys(RT.legs).forEach(function(lg){var have={};(o2[lg]=o2[lg]||[]).forEach(function(r){have[r[0]]=1});RT.legs[lg].forEach(function(r){if(!have[r[0]])o2[lg].push(r)})});save()}
     clearHash();location.reload()}
+  else if(d.rtpaste){var openIn=function(){sh={t:'rtin'};render();setTimeout(function(){var x=document.getElementById('rtin');if(x)x.focus()},350)};
+    try{navigator.clipboard.readText().then(function(txt){var r=rtFrom(txt);if(r){parseRt(r);sh={t:'rt'};render()}else openIn()},openIn)}catch(e){openIn()}}
+  else if(d.rtread){var tv=(document.getElementById('rtin')||{}).value||'',r2=rtFrom(tv);
+    if(!r2){sh={t:'rtin',msg:'這段文字裡找不到班次（要有 #r= 開頭的那一行）。請 Claude 照 app 給的格式補上。'};render()}else{parseRt(r2);sh={t:'rt'};render()}}
   else if(d.rtclear){S.rt={};save();location.reload()}
   else if(d.trip){if(window.TripLock&&d.trip!==TripLock.current)TripLock.pick(d.trip)}
   else if(d.sw){if(S.sw[d.sw]!==d.v){S.sw[d.sw]=d.v;save();location.reload()}}

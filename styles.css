@@ -694,3 +694,4 @@ body.th-glass .desk .kv{margin-top:10px;padding:16px 18px}
 .pv.reh span{font-size:13px;font-weight:700;color:#FFB020;letter-spacing:.04em}
 .pv.reh b{flex:1;font-size:15px}
 .rtl{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--rule)}.rtl b{font-size:16px}.rtl span{text-align:right;font-size:15px;line-height:1.5}
+#rtin{width:100%;box-sizing:border-box;font-size:15px;margin-top:8px;min-height:110px}
