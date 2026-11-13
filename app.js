@@ -308,9 +308,9 @@ function lastItem(i){var it=DAYS[i].items;return it[it.length-1]}
 function skipBtn(i,it){return it&&it.id!==lastItem(i).id?'<button class="opt ghost" data-skipit="'+it.id+'">不去「'+esc(it.name)+'」了</button>':''}
 function fixOpts(m){var i=m.i,h='';
   if(m.kind==='conf'){h=m.rx.length?m.rx.slice(0,3).map(function(o,n){return '<button class="opt" data-rx="'+n+'">'+esc(o.say)+'</button>'}).join('')
-      :(m.rx.fail||[]).map(function(f){return '<p class="gapp">'+esc(f)+'</p>'}).join('')+(m.is.it.fallback?'<p class="gapp">備案：'+esc(m.is.it.fallback)+'</p>':'')+skipBtn(i,m.is.it)+'<a class="opt ai" href="'+askUrl('這個情況我該怎麼辦？請查現在的班次。')+'" target="_blank" rel="noopener">問 Claude</a><button class="opt ghost" data-rtpaste="1">貼上 Claude 的回答</button>'}
+      :(m.rx.fail||[]).map(function(f){return '<p class="gapp">'+esc(f)+'</p>'}).join('')+(m.is.it.fallback?'<p class="gapp">備案：'+esc(m.is.it.fallback)+'</p>':'')+skipBtn(i,m.is.it)+askBtn('這個情況我該怎麼辦？請查現在的班次。',null,'問 Claude')}
   else if(m.kind==='gap'){var g=m.gap;h=(g.it.fallback?'<p class="gapp">備案：'+esc(g.it.fallback)+'</p>':'')+skipBtn(i,g.it)
-      +'<a class="opt ai" href="'+askUrl('我要從'+pname(i,g.from)+'去'+pname(i,g.it.place)+'，請查現在最近的班次和走法。',[g.from,g.it.place])+'" target="_blank" rel="noopener">問 Claude 查班次</a><button class="opt ghost" data-rtpaste="1">貼上 Claude 的回答</button>'
+      +askBtn('我要從'+pname(i,g.from)+'去'+pname(i,g.it.place)+'，請查現在最近的班次和走法。',[g.from,g.it.place],'問 Claude 查班次')
       +'<a class="opt ghost" href="'+transitUrl(i,g.it.place)+'" target="_blank" rel="noopener">用 Google Maps 查路線</a>'}
   return h?'<div class="opts">'+h+'</div>':''}
 function lostLine(m){return m.lost.length&&!m.wi?'<div class="ref lost">'+ico('skip')+'去不了了：'+esc(names(m.lost))+'</div>':''}
@@ -371,13 +371,37 @@ function shareUrl(){var o={d:cur,t:S.meet.time||'',p:S.meet.place||''};
   return location.href.split('#')[0]+'#g='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(o)))))}
 function groupText(){var D=DAYS[cur],m=S.meet,L=['【'+dlabel(cur)+' '+D.name+'】'];
   if(m.time||m.place)L.push('集合 '+(m.time||'')+' '+(m.place||''));L.push(shareUrl());return L.join('\n')}
-function askUrl(q,ex){var st=mkState(cur),txt=PL[cur].brief(st),PS=DAYS[cur].places||{},ks=Object.keys(PS);
+function askText(q,ex){var st=mkState(cur),txt=PL[cur].brief(st),PS=DAYS[cur].places||{},ks=Object.keys(PS);
   ex=ex||[ks[0]||'a',ks[1]||'b'];
-  var back='\n\n如果你查到具體的班次，回答最後另起一行，照下面的格式寫一行（我會複製整段回答貼回 app，不要放在程式碼區塊裡）：\n'
+  var back='\n\n如果你查到具體的班次，回答最後另起一行，照下面的格式寫一行（app 會讀這一行，不要放在程式碼區塊裡）：\n'
     +location.href.split('#')[0]+'#r='+TRIP.key+'/'+(cur+1)+'/起點代號~終點代號:出發-抵達,出發-抵達'
     +'\n例如 '+ex[0]+'~'+ex[1]+':0930-1005,1010-1045。時間用四位數字；好幾段就用分號隔開。只放你查得到、確定有開的班次。'
     +'\n地點代號：'+ks.map(function(k){return k+'＝'+PS[k]}).join('、');
-  return 'https://claude.ai/new?q='+encodeURIComponent('我正在旅行（'+TRIP.title+'）。旅遊助理 app 目前的狀態：\n'+txt+'\n\n請先講結論，簡短回答。'+q+back)}
+  return '我正在旅行（'+TRIP.title+'）。旅遊助理 app 目前的狀態：\n'+txt+'\n\n請先講結論，簡短回答。'+q+back}
+function askUrl(q,ex){return 'https://claude.ai/new?q='+encodeURIComponent(askText(q,ex))}
+/* ---------- 階段四：在 app 裡問 Claude ----------
+   app →（GitHub API）觸發私人 repo 的 Action →（帶 secret）觸發 Claude Code routine → Claude 查完把 answers/<編號>.json 推到 claude/answers → app 輪詢讀回來。
+   GitHub 權杖只存在這支手機（localStorage），只能用在那個私人 repo。沒設定、失敗或逾時就退回跳到 Claude app 問。 */
+var ASKK='ask-cfg',ASK_TIMEOUT=6*60000,askTimer=0;
+function askCfg(){try{var c=JSON.parse(localStorage.getItem(ASKK)||'null');return c&&c.tok&&c.repo?c:null}catch(e){return null}}
+function gh(path,opt){var c=askCfg();opt=opt||{};return fetch('https://api.github.com/repos/'+c.repo+path,{method:opt.method||'GET',cache:'no-store',body:opt.body,
+  headers:Object.assign({'Authorization':'Bearer '+c.tok,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'},opt.headers||{})})}
+/* 問 Claude 的按鈕：設定好就在 app 裡問，否則照舊跳出去 */
+function askBtn(q,ex,label,cls){if(askCfg())return '<button class="'+(cls||'opt ai')+'" data-askin="1" data-q="'+esc(q)+'" data-ex="'+esc((ex||[]).join(','))+'">'+label+'</button>';
+  return '<a class="'+(cls||'opt ai')+'" href="'+askUrl(q,ex)+'" target="_blank" rel="noopener">'+label+'</a><button class="opt ghost" data-rtpaste="1">貼上 Claude 的回答</button>'}
+function askStart(q,ex){var id='a'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  S.ask={id:id,t0:Date.now(),q:q,ex:ex,d:cur};save();sh={t:'ask'};render();
+  gh('/actions/workflows/ask.yml/dispatches',{method:'POST',body:JSON.stringify({ref:'main',inputs:{id:id,text:askText(q,ex)}})})
+    .then(function(r){if(r.status!==204)throw new Error('觸發失敗（GitHub 回 '+r.status+(r.status===401?'：權杖不對或過期':r.status===404?'：找不到 repo 或沒有權限':'')+'）');askPoll()})
+    .catch(function(e){if(S.ask&&S.ask.id===id){S.ask.err=e.message||'連不上 GitHub';save();if(sh&&sh.t==='ask')drawSheet()}})}
+function askPoll(){clearTimeout(askTimer);var a=S.ask;if(!a||a.res||a.err)return;
+  if(Date.now()-a.t0>ASK_TIMEOUT){a.err='等了 6 分鐘還沒有答案。';save();if(sh&&sh.t==='ask')drawSheet();return}
+  gh('/contents/answers/'+a.id+'.json?ref=claude%2Fanswers&_='+Date.now(),{headers:{'Accept':'application/vnd.github.raw+json'}}).then(function(r){
+    if(r.status===200)return r.json().then(function(j){if(!S.ask||S.ask.id!==a.id)return;S.ask.res={answer:String(j.answer||''),r:String(j.r||''),sources:(j.sources||[]).slice(0,5)};save();vib([20,60,20]);
+      if(!sh||sh.t==='ask'){sh={t:'ask'};render()}});
+    askTimer=setTimeout(askPoll,8000)}).catch(function(){askTimer=setTimeout(askPoll,12000)})}
+if(S.ask&&!S.ask.res&&!S.ask.err)setTimeout(askPoll,1500);
+setInterval(function(){var e=document.getElementById('askel');if(e&&S.ask){var s2=Math.floor((Date.now()-S.ask.t0)/1000);e.textContent=Math.floor(s2/60)+':'+p2(s2%60)}},1000);
 function vGuest(){var D=DAYS[cur],hk=D.hotel&&HOTELS[D.hotel];
   var h='<section class="stage go guest"><header class="hd"><div><b>'+esc(D.name)+'</b><span>'+dlabel(cur)+'</span></div></header>';
   if(G.t||G.p)h+='<div class="alert"><span class="lab">集合</span>'+(G.t?'<b class="num huge">'+esc(G.t)+'</b>':'')+(G.p?'<span class="why">'+esc(G.p)+'</span>':'')+'</div>'+(G.p?'<div class="acts"><a class="pb" href="'+mapUrl(G.p)+'" target="_blank" rel="noopener">'+ico('nav')+'導航</a></div>':'');
@@ -408,6 +432,11 @@ function vMore(){var bk=backBtn();
      +(Object.keys(S.rt).length?'<h2>Claude 查到的班次</h2><p class="sub">'+Object.keys(S.rt).map(function(k){return '第 '+(+k+1)+' 天 '+Object.keys(S.rt[k]).length+' 段'}).join('、')+'</p><div class="row"><button class="gb" data-rtclear="1">清掉，改回原本的班表</button></div>':'')
      +'<h2>重來</h2><div class="row"><button class="gb" data-reset="1">清掉今天的進度</button></div><h2>換手機</h2><textarea id="bk" class="mono" aria-label="備份資料">'+esc(JSON.stringify(S))+'</textarea><div class="row"><button class="gb" data-copy="bk">複製</button><button class="gb" data-imp="1">匯入</button><span class="sub" id="cpm"></span></div>'
      +(window.TripLock&&TripLock.sealed?'<h2>密碼</h2><p class="sub">這台手機記得行程密碼。借給別人或手機要送修前，可以先鎖起來，之後打開要重新輸入。</p><div class="row"><button class="gb" data-lock="1">鎖起來</button></div>':'')}
+  if(sub==='askset'){var C=askCfg(),guess=(/^([^.]+)\.github\.io$/.exec(location.hostname)||[])[1];
+    return '<header class="hd">'+bk+'<div><b>問 Claude 設定</b></div></header><p class="sub">設定好之後，「問 Claude」會留在 app 裡問，答案大約 2～3 分鐘後自己跳出來。權杖只存在這支手機，不會上傳。</p>'
+     +'<div class="panel"><div class="lbl">私人 repo</div><input type="text" id="askrepo" value="'+esc(C?C.repo:(guess?guess+'/trip-ask':''))+'" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="私人 repo">'
+     +'<div class="lbl">GitHub 權杖</div><input type="password" id="asktok" placeholder="'+(C?'已設定（要換才貼新的）':'github_pat_…')+'" autocomplete="off" aria-label="GitHub 權杖">'
+     +'<div class="row"><button class="gb pri" data-askset="1">儲存並測試</button>'+(C?'<button class="gb" data-askclr="1">清除</button>':'')+'</div><p class="sub" id="askmsg">'+(C?'目前：已設定，問 Claude 會留在 app 裡。':'目前：沒設定，問 Claude 會跳到 Claude app。')+'</p></div>'}
   if(sub==='reh'){
     if(REH)return '<header class="hd">'+bk+'<div><b>演練</b></div></header><div class="panel"><div class="lbl">演練中</div><p>第 '+(REH.i+1)+' 天（'+esc(DAYS[REH.i].name)+'）。時間用這支手機的時鐘，天氣用示範。按的「到了」「走了」都另外存，不會算進正式行程。</p></div>'
       +'<div class="row"><button class="gb" data-reh="off">結束演練，丟掉演練進度</button></div><p class="sub">過了今天會自動結束。</p>';
@@ -427,7 +456,7 @@ function vMore(){var bk=backBtn();
    +(k0&&HOTELS[k0]?'<button class="tonight" data-desk="'+k0+'"><span>今晚住</span><b>'+esc(HOTELS[k0].jp)+'</b><i>給櫃檯看'+ico('chev')+'</i></button>':'')
    +'<div class="menu">'
    +'<button data-sheet="theme"><span>外觀<small>'+THEMES.filter(function(x){return x[0]===S.theme})[0][1]+'</small></span>'+ico('chev')+'</button>'
-   +it('prep','出發前')+(realIdx()<0||REH?it('reh',REH?'演練中（第 '+(REH.i+1)+' 天）':'演練'):'')+((window.TripLock&&TripLock.trips.length>1)?it('trips','換行程'):'')+it('data','紀錄和備份')+it('install','裝到主畫面')+'</div>'+'<p class="ver"><button class="verb" data-diag="1">版本 <span id="ver">'+esc(VER)+'</span></button></p>'}
+   +it('prep','出發前')+it('askset','問 Claude 設定')+(realIdx()<0||REH?it('reh',REH?'演練中（第 '+(REH.i+1)+' 天）':'演練'):'')+((window.TripLock&&TripLock.trips.length>1)?it('trips','換行程'):'')+it('data','紀錄和備份')+it('install','裝到主畫面')+'</div>'+'<p class="ver"><button class="verb" data-diag="1">版本 <span id="ver">'+esc(VER)+'</span></button></p>'}
 /* 版本：顯示這台手機現在用的快取版號（sw.js 的 trip-vNN），確認新版有沒有生效 */
 var VER='…';try{caches.keys().then(function(ks){var k=ks.filter(function(x){return /^trip-v\d+$/.test(x)}).sort(function(a,b){return +a.slice(6)-+b.slice(6)}).pop();VER=k?k.replace('trip-',''):'未快取';var e=document.getElementById('ver');if(e)e.textContent=VER})}catch(e){VER='—'}
 /* 檢查畫面：點版號打開。列出手機實際回報的尺寸，截圖給 Claude 判斷底部那一條的原因。紅線＝網頁框的底，黃框＝整個螢幕 */
@@ -476,6 +505,14 @@ function sheetHtml(){if(!sh)return '';var i=cur,D=DAYS[i],h='';
     THEMES.forEach(function(x){h+='<button class="rowb th'+(S.theme===x[0]?' on':'')+'" data-theme="'+x[0]+'" aria-pressed="'+(S.theme===x[0])+'"><b>'+x[1]+'</b><span>'+x[2]+'</span></button>'});
     if(S.theme==='glass'&&window.DeviceOrientationEvent&&typeof DeviceOrientationEvent.requestPermission==='function')h+='<div class="grid"><button class="gb" data-tilt="1">'+(tiltMsg||'傾斜手機時，玻璃的光跟著動')+'</button></div>';
     return h}
+  if(sh.t==='ask'){var A=S.ask;if(!A)return '<div class="st">問 Claude</div><p class="sub">沒有進行中的問題。</p>';
+    var fb='<a class="gb" href="'+askUrl(A.q,A.ex)+'" target="_blank" rel="noopener">改用 Claude app 問</a>';
+    if(A.res)return '<div class="ty">Claude 的回答</div><div class="st">'+esc(A.q||'現在的狀況')+'</div><p class="ans">'+esc(A.res.answer).replace(/\n/g,'<br>')+'</p>'
+      +(A.res.sources.length?'<p class="sub">出處：'+A.res.sources.map(function(u,n){return /^https?:\/\//.test(u)?'<a href="'+esc(u)+'" target="_blank" rel="noopener">'+(n+1)+'</a>':''}).join('　')+'</p>':'')
+      +'<div class="grid'+(A.res.r?'':' one')+'"><button class="gb" data-askdone="1">知道了</button>'+(A.res.r?'<button class="gb pri" data-askr="1">看查到的班次</button>':'')+'</div>';
+    if(A.err)return '<div class="ty">問 Claude</div><div class="st">沒有問到</div><p>'+esc(A.err)+'</p><div class="grid"><button class="gb" data-askdone="1">算了</button>'+fb+'</div>';
+    return '<div class="ty">問 Claude</div><div class="st">正在問…　<span class="num" id="askel">0:00</span></div><p class="sub">'+esc(A.q||'現在的狀況')+'</p><p class="sub">Claude 在雲端查，通常 2～3 分鐘。可以先關掉這個面板做別的事，好了會自己跳出來。</p>'
+      +'<div class="grid"><button class="gb" data-close="1">先關掉</button>'+fb+'</div>'}
   if(sh.t==='rtin')return '<div class="ty">Claude 查到的班次</div><div class="st">貼上 Claude 的回答</div><p class="sub">在 Claude 那邊按回答下面的「複製」，回來長按下面的框貼上。整段貼上就好，app 會自己找出班次。</p>'
      +'<textarea id="rtin" rows="5" aria-label="貼上 Claude 的回答"></textarea>'+(sh.msg?'<p class="lt">'+esc(sh.msg)+'</p>':'')
      +'<div class="grid"><button class="gb" data-close="1">取消</button><button class="gb pri" data-rtread="1">讀取</button></div>';
@@ -594,6 +631,14 @@ document.addEventListener('click',function(e){
     location.reload()}
   else if(d.rtok){if(RT&&RT.legs){var o2=S.rt[RT.d]=S.rt[RT.d]||{};Object.keys(RT.legs).forEach(function(lg){var have={};(o2[lg]=o2[lg]||[]).forEach(function(r){have[r[0]]=1});RT.legs[lg].forEach(function(r){if(!have[r[0]])o2[lg].push(r)})});save()}
     clearHash();location.reload()}
+  else if(d.askin){askStart(d.q,d.ex?d.ex.split(','):null)}
+  else if(d.askdone){delete S.ask;save();sh=null;render()}
+  else if(d.askr){var rr=S.ask&&S.ask.res&&(rtFrom(S.ask.res.r)||S.ask.res.r.replace(/^#?r=/,''));if(rr){parseRt(rr);sh={t:'rt'};render()}}
+  else if(d.askset){var rp=(document.getElementById('askrepo').value||'').trim(),tk=(document.getElementById('asktok').value||'').trim(),old=askCfg(),msg=document.getElementById('askmsg');
+    if(!tk&&old)tk=old.tok;if(!/^[\w.-]+\/[\w.-]+$/.test(rp)||!tk){msg.textContent='repo 要像 帳號/trip-ask，權杖也要填。';return}
+    try{localStorage.setItem(ASKK,JSON.stringify({repo:rp,tok:tk}))}catch(e){}msg.textContent='測試中…';
+    gh('/actions/workflows/ask.yml').then(function(r){msg.textContent=r.ok?'✓ 可以用了。問 Claude 會留在 app 裡。':'✗ 不行（GitHub 回 '+r.status+'）：檢查 repo 名稱、權杖的權限（Actions 讀寫、Contents 唯讀）和期限。'},function(){msg.textContent='✗ 連不上 GitHub，等有網路再試。'})}
+  else if(d.askclr){try{localStorage.removeItem(ASKK)}catch(e){}render()}
   else if(d.rtpaste){var openIn=function(){sh={t:'rtin'};render();setTimeout(function(){var x=document.getElementById('rtin');if(x)x.focus()},350)};
     try{navigator.clipboard.readText().then(function(txt){var r=rtFrom(txt);if(r){parseRt(r);sh={t:'rt'};render()}else openIn()},openIn)}catch(e){openIn()}}
   else if(d.rtread){var tv=(document.getElementById('rtin')||{}).value||'',r2=rtFrom(tv);
