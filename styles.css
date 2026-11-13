@@ -646,3 +646,6 @@ body.locked #tabs,body.locked #fx,body.locked #drops{display:none}
 /* iPhone 主畫面 app 有時回報的視窗高度比螢幕短（底部露出底色）。sky.js 把這台手機的螢幕高度寫進 --fullh，畫布從頂端畫到螢幕最底；座標從頂端算，玻璃位置不受影響 */
 #fx,#drops{top:0;bottom:auto;height:max(100lvh,var(--fullh,0px));min-height:0}
 .ver{text-align:center;font-size:12px;opacity:.55;margin:18px 0 0}
+/* 整頁固定不動：html/body 不捲、不回彈，只有 #app 裡面捲。iPhone 就不會整頁被拉動或縮放，畫布和玻璃也不會跟著跑 */
+html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+#app{position:fixed;top:0;bottom:0;left:0;right:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:none;box-sizing:border-box}

@@ -443,13 +443,14 @@ if(window.Sky)Sky.init(document.getElementById('fx'),document.getElementById('dr
 function skyRender(){var glass=S.theme==='glass'&&!!window.Sky;document.body.classList.toggle('th-glass',glass);var t0=nowMin(cur);
   if(glass){var D=DAYS[cur];Sky.set({scape:D.scape,lat:D.ll[0],lng:D.ll[1],at:skyAt(cur,t0),wx:skyWx(cur,t0)});Sky.on(true);Sky.poke()}
   else{if(window.Sky)Sky.on(false);sky(t0)}}
-var planAnim=true;
+var planAnim=true,lastTab='';
 function render(){
   document.body.dataset.tab=G?'guest':tab;skyRender();
   if(G){tabsEl.hidden=true;app.innerHTML=vGuest();drawSheet();return}
   tabsEl.hidden=false;
   TABS.forEach(function(t,n){var b=tabsEl.children[n+1],on=tab===t[0];b.className=on?'on':'';if(on){b.setAttribute('aria-current','page');tabsEl.style.setProperty('--ti',n)}else b.removeAttribute('aria-current')});
   app.innerHTML=tab==='now'?vNow():tab==='plan'?vPlan():vMore();
+  if(tab!==lastTab){app.scrollTop=0;lastTab=tab} /* 頁面本身不捲，捲的是 #app；換分頁時回到最上面 */
   var a=document.getElementById('arc'),hd=document.getElementById('hdot'),rl=document.querySelector('.roll');
   lastBig=rl?rl.dataset.s:'';if(a)lastFrac=+a.dataset.f;
   requestAnimationFrame(function(){requestAnimationFrame(function(){
