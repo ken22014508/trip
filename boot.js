@@ -27,7 +27,7 @@ function open(key,box){return crypto.subtle.decrypt({name:'AES-GCM',iv:b64(box.i
 /* ---- 輸入密碼的畫面 ---- */
 function ask(box,msg){
   document.body.classList.add('locked');
-  app.innerHTML='<form class="lock" autocomplete="off"><div class="lock-mark" aria-hidden="true"></div><h1>旅遊助理</h1>'
+  app.innerHTML='<form class="lockbox" autocomplete="off"><div class="lock-mark" aria-hidden="true"></div><h1>旅遊助理</h1>'
     +'<p>'+(msg||'輸入行程密碼。這台手機只要輸入一次。')+'</p>'
     +'<input type="password" id="lockpw" autocomplete="current-password" aria-label="行程密碼" enterkeyhint="go">'
     +'<button type="submit">打開</button></form>';
@@ -39,7 +39,7 @@ function ask(box,msg){
       .catch(function(){ask(box,'密碼不對，再試一次。')})})}
 function go(code){document.body.classList.remove('locked');app.innerHTML='';window.TripLock.sealed=true;run(code);start()}
 
-if(!window.crypto||!crypto.subtle){app.innerHTML='<p class="lock">這個瀏覽器不能解密。請用 Safari 或 Chrome 打開。</p>';return}
+if(!window.crypto||!crypto.subtle){app.innerHTML='<p class="lockbox">這個瀏覽器不能解密。請用 Safari 或 Chrome 打開。</p>';return}
 fetch('trip.sealed.json',{cache:'no-cache'}).then(function(r){return r.ok?r.json():null}).catch(function(){return null}).then(function(box){
   if(!box||!box.ct)return load('trip.js').then(start);
   return kget(box.salt).then(function(key){
