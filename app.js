@@ -4,8 +4,12 @@
 var app=document.getElementById('app'),tabsEl=document.getElementById('tabs'),sheet=document.getElementById('sheet');
 
 /* ---------- 狀態 ---------- */
-var S={};
-try{var raw=localStorage.getItem(TRIP.key);if(raw)S=JSON.parse(raw)||{}}catch(e){}
+/* 演練（G7）：出發前在台灣走一遍。選一天，用手機自己的時鐘當那天的時間；進度另外存，結束就丟掉。只在開始的那一天有效 */
+var REH=null,RK='reh:'+TRIP.key;
+try{REH=JSON.parse(localStorage.getItem(RK)||'null');if(REH&&REH.on!==localYmd()){localStorage.removeItem(RK);localStorage.removeItem(TRIP.key+':reh');REH=null}}catch(e){REH=null}
+function localYmd(){var d=new Date();return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)}
+var SK=REH?TRIP.key+':reh':TRIP.key,S={};
+try{var raw=localStorage.getItem(SK);if(raw)S=JSON.parse(raw)||{}}catch(e){}
 function norm(){['sw','done','drop','ext','cut','pin','here','at','lastT','notes','pv','meet'].forEach(function(k){S[k]=S[k]||{}});
   S.exp=S.exp||[];S.hist=S.hist||[];if(!S.rate)S.rate=TRIP.rate;if(!S.theme)S.theme='glass';
   if(!S.mem||!S.mem.length)S.mem=TRIP.members.map(function(n,k){return {id:'m'+k,n:n,g:0}});
@@ -13,7 +17,7 @@ function norm(){['sw','done','drop','ext','cut','pin','here','at','lastT','notes
   S.exp.forEach(function(e){if(byName[e.payer])e.payer=byName[e.payer];e.among=(e.among||[]).map(function(a){return byName[a]||a})});
   SW.forEach(function(s){if(!(s.k in S.sw))S.sw[s.k]=s.opts[0][0]})}
 norm();
-function save(){try{localStorage.setItem(TRIP.key,JSON.stringify(S))}catch(e){}}
+function save(){try{localStorage.setItem(SK,JSON.stringify(S))}catch(e){}}
 
 /* ---------- 小工具 ---------- */
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
@@ -45,9 +49,10 @@ function ico(n){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 /* ---------- 時間：一律用目的地的時間 ---------- */
 function there(){var d=new Date();return new Date(d.getTime()+(TRIP.utc*60+d.getTimezoneOffset())*60000)}
 function dayDate(i){var p=TRIP.start.split('-');return new Date(+p[0],p[1]-1,+p[2]+i)}
-function liveIdx(){var t=ymd(there());for(var i=0;i<DAYS.length;i++)if(ymd(dayDate(i))===t)return i;return -1}
+function realIdx(){var t=ymd(there());for(var i=0;i<DAYS.length;i++)if(ymd(dayDate(i))===t)return i;return -1}
+function liveIdx(){return REH?REH.i:realIdx()}
 function isLive(i){return liveIdx()===i}
-function nowMin(i){if(isLive(i)){var d=there();return d.getHours()*60+d.getMinutes()}
+function nowMin(i){if(isLive(i)){var d=REH?new Date():there();return d.getHours()*60+d.getMinutes()}
   return S.pv[i]!=null?S.pv[i]:hm(DAYS[i].start||'09:30')}
 function dlabel(i){var d=dayDate(i);return (d.getMonth()+1)+'/'+d.getDate()}
 
@@ -153,7 +158,7 @@ function locate(quiet){if(!navigator.geolocation){if(!quiet){posMsg='這台不�
   navigator.geolocation.getCurrentPosition(function(p){pos={ll:[p.coords.latitude,p.coords.longitude],t:Date.now()};posMsg='';
       if(!(document.activeElement&&/TEXTAREA|INPUT/.test(document.activeElement.tagName)))render()},
     function(e){if(quiet)return;posMsg=e.code===1?'定位被拒絕':'定位不到';render()},{enableHighAccuracy:true,timeout:12000,maximumAge:30000})}
-function autoLocate(){if(liveIdx()<0||document.hidden||!navigator.permissions||!navigator.geolocation)return;
+function autoLocate(){if(REH||liveIdx()<0||document.hidden||!navigator.permissions||!navigator.geolocation)return;
   try{navigator.permissions.query({name:'geolocation'}).then(function(r){if(r.state==='granted')locate(true)},function(){})}catch(e){}}
 function dist(a,b){var R=6371000,r=Math.PI/180,d1=(b[0]-a[0])*r,d2=(b[1]-a[1])*r,
   h=Math.sin(d1/2)*Math.sin(d1/2)+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.sin(d2/2)*Math.sin(d2/2);return 2*R*Math.asin(Math.sqrt(h))}
@@ -212,15 +217,18 @@ function rem(m){m=Math.max(0,Math.round(m));return m<60?m+' 分':Math.floor(m/60
 function vib(p){try{if(navigator.vibrate)navigator.vibrate(p||8)}catch(e){}}
 function go(t,s){whatIf=null;chg=null;if(t==='plan'&&tab!=='plan')planAnim=true;tab=t;sub=s||null;sh=null;paint();scrollTo(0,0)}
 function kindTxt(it){return it.kind==='wall'?'要準時到':it.kind==='must'?'一定要去':'有空再去'}
-function wxNow(i,t0){var x;if(!isLive(i)&&S.dwx){var dv=DWXV[S.dwx];x={c:dv.c,p:dv.p,w:dv.code}}else{var w=wx(i);if(!w||!w.h)return '';x=w.h[Math.floor(t0/60)%24]}if(!x)return '';
+function wxNow(i,t0){var x;if((!isLive(i)||REH)&&S.dwx){var dv=DWXV[S.dwx];x={c:dv.c,p:dv.p,w:dv.code}}else{var w=wx(i);if(!w||!w.h)return '';x=w.h[Math.floor(t0/60)%24]}if(!x)return '';
   return '<button class="wxb'+(x.p>=60?' wet':'')+'" data-sheet="wx" aria-label="天氣 '+Math.round(x.c)+' 度，降雨機率 '+x.p+'%">'+ico(wicon(x.w))+'<b>'+Math.round(x.c)+'°</b>'+(x.p>=30?'<i>'+x.p+'%</i>':'')+'</button>'}
 var DWX=[['','實際'],['clear','晴'],['cloud','多雲'],['rain','雨'],['snow','雪'],['fog','霧'],['storm','雷雨']];
 var DWXV={clear:{cc:5,pr:0,code:0,ws:6,c:22,p:0},cloud:{cc:80,pr:0,code:3,ws:14,c:19,p:20},rain:{cc:96,pr:3,code:63,ws:22,c:15,p:90},snow:{cc:92,pr:1.2,code:73,ws:6,c:-1,p:80},fog:{cc:65,pr:0,code:45,ws:2,c:12,p:10},storm:{cc:100,pr:8,code:95,ws:38,c:18,p:95}};
-function pvBar(t0){if(isLive(cur))return '';var dw=S.dwx||'',lab=DWX.filter(function(x){return x[0]===dw})[0][1];
+function pvBar(t0){var dw=S.dwx||'',lab=DWX.filter(function(x){return x[0]===dw})[0][1];
+  if(REH&&cur===REH.i)return '<div class="pvrow"><button class="pv reh" data-sub="reh" aria-label="演練中，點這裡結束"><span>演練中</span><b>第 '+(REH.i+1)+' 天　'+fmt(t0)+'</b></button>'
+   +(S.theme==='glass'?'<button class="pvw" data-dwx="1" aria-label="示範天氣：'+lab+'">'+lab+'</button>':'')+'</div>';
+  if(isLive(cur))return '';
   return '<div class="pvrow"><label class="pv"><span>示範時間</span><input type="range" id="pv" min="0" max="1435" step="5" value="'+t0+'" style="--pvp:'+(t0/14.35).toFixed(1)+'%" aria-label="示範時間"><b id="pvv">'+fmt(t0)+'</b></label>'
    +(S.theme==='glass'?'<button class="pvw" data-dwx="1" aria-label="示範天氣：'+lab+'">'+lab+'</button>':'')+'</div>'}
 /* 天空要用的天氣：示範模式可以手動選；否則用預報 */
-function skyWx(i,t0){if(!isLive(i)&&S.dwx)return DWXV[S.dwx];var w=WX[ymd(dayDate(i))];if(!w||!w.h)return null;var h=w.h[Math.floor(t0/60)%24];
+function skyWx(i,t0){if((!isLive(i)||REH)&&S.dwx)return DWXV[S.dwx];var w=WX[ymd(dayDate(i))];if(!w||!w.h)return null;var h=w.h[Math.floor(t0/60)%24];
   return h?{cc:h.cc==null?(h.w>=3?80:h.w>=1?40:5):h.cc,pr:h.pr||0,code:h.w||0,ws:h.ws||0}:null}
 function skyAt(i,t0){var d=dayDate(i);return new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate(),0,t0)-TRIP.utc*3600000)}
 function head(m){var i=m.i,D=DAYS[i],where=m.st.here?'在 '+item(i,m.st.here).name:m.kind==='move'?'往 '+m.next.it.name:m.kind==='gap'?'往 '+m.gap.it.name:m.kind==='conf'?'往 '+m.is.it.name:D.name;
@@ -368,6 +376,11 @@ function vMore(){var bk=backBtn();
      +'<h2>實際時間和筆記</h2><textarea id="lg" readonly aria-label="實際紀錄">'+esc(log||'還沒有紀錄')+'</textarea><div class="row"><button class="gb" data-copy="lg">複製</button></div>'
      +'<h2>重來</h2><div class="row"><button class="gb" data-reset="1">清掉今天的進度</button></div><h2>換手機</h2><textarea id="bk" class="mono" aria-label="備份資料">'+esc(JSON.stringify(S))+'</textarea><div class="row"><button class="gb" data-copy="bk">複製</button><button class="gb" data-imp="1">匯入</button><span class="sub" id="cpm"></span></div>'
      +(window.TripLock&&TripLock.sealed?'<h2>密碼</h2><p class="sub">這台手機記得行程密碼。借給別人或手機要送修前，可以先鎖起來，之後打開要重新輸入。</p><div class="row"><button class="gb" data-lock="1">鎖起來</button></div>':'')}
+  if(sub==='reh'){
+    if(REH)return '<header class="hd">'+bk+'<div><b>演練</b></div></header><div class="panel"><div class="lbl">演練中</div><p>第 '+(REH.i+1)+' 天（'+esc(DAYS[REH.i].name)+'）。時間用這支手機的時鐘，天氣用示範。按的「到了」「走了」都另外存，不會算進正式行程。</p></div>'
+      +'<div class="row"><button class="gb" data-reh="off">結束演練，丟掉演練進度</button></div><p class="sub">過了今天會自動結束。</p>';
+    return '<header class="hd">'+bk+'<div><b>演練</b></div></header><p class="sub">出發前在台灣走一遍：選一天，app 會用這支手機現在的時間當那天的時間，你照著走、照常按「到了」「走了」，看提醒時機、操作順不順、耗不耗電。天氣用示範。進度另外存，正式出發時是乾淨的。</p>'
+      +'<div class="menu">'+DAYS.map(function(d,k){return '<button data-reh="'+k+'"><span>第 '+(k+1)+' 天　'+esc(d.name)+'<small>'+dlabel(k)+'　'+esc(d.start||'')+(d.start?' 出發':'')+'</small></span>'+ico('chev')+'</button>'}).join('')+'</div>'}
   if(sub==='trips'){var TL=window.TripLock||{},md=function(x){return x.slice(5).replace('-','/')};
     return '<header class="hd">'+bk+'<div><b>換行程</b></div></header><p class="sub">打開 app 時會自動選正在進行、或最近要出發的那趟。每趟的進度和記帳各自存。</p><div class="menu">'
      +(TL.trips||[]).map(function(t){var on=t.key===TL.current;return '<button data-trip="'+esc(t.key)+'"'+(on?' aria-current="true"':'')+'><span>'+esc(t.title)+'<small>'+md(t.start)+' ～ '+md(t.end)+(on?'　現在這趟':'')+'</small></span>'+(on?ico('check'):ico('chev'))+'</button>'}).join('')+'</div>'}
@@ -382,7 +395,7 @@ function vMore(){var bk=backBtn();
    +(k0&&HOTELS[k0]?'<button class="tonight" data-desk="'+k0+'"><span>今晚住</span><b>'+esc(HOTELS[k0].jp)+'</b><i>給櫃檯看'+ico('chev')+'</i></button>':'')
    +'<div class="menu">'
    +'<button data-sheet="theme"><span>外觀<small>'+THEMES.filter(function(x){return x[0]===S.theme})[0][1]+'</small></span>'+ico('chev')+'</button>'
-   +it('prep','出發前')+((window.TripLock&&TripLock.trips.length>1)?it('trips','換行程'):'')+it('data','紀錄和備份')+it('install','裝到主畫面')+'</div>'+'<p class="ver"><button class="verb" data-diag="1">版本 <span id="ver">'+esc(VER)+'</span></button></p>'}
+   +it('prep','出發前')+(realIdx()<0||REH?it('reh',REH?'演練中（第 '+(REH.i+1)+' 天）':'演練'):'')+((window.TripLock&&TripLock.trips.length>1)?it('trips','換行程'):'')+it('data','紀錄和備份')+it('install','裝到主畫面')+'</div>'+'<p class="ver"><button class="verb" data-diag="1">版本 <span id="ver">'+esc(VER)+'</span></button></p>'}
 /* 版本：顯示這台手機現在用的快取版號（sw.js 的 trip-vNN），確認新版有沒有生效 */
 var VER='…';try{caches.keys().then(function(ks){var k=ks.filter(function(x){return /^trip-v\d+$/.test(x)}).sort(function(a,b){return +a.slice(6)-+b.slice(6)}).pop();VER=k?k.replace('trip-',''):'未快取';var e=document.getElementById('ver');if(e)e.textContent=VER})}catch(e){VER='—'}
 /* 檢查畫面：點版號打開。列出手機實際回報的尺寸，截圖給 Claude 判斷底部那一條的原因。紅線＝網頁框的底，黃框＝整個螢幕 */
@@ -534,6 +547,9 @@ document.addEventListener('click',function(e){
     render()}
   else if(d.diag)diag()
   else if(d.lock){if(window.TripLock)TripLock.forget()}
+  else if(d.reh!=null){try{if(d.reh==='off'){localStorage.removeItem(RK);localStorage.removeItem(TRIP.key+':reh')}
+      else{var seed={sw:S.sw,theme:S.theme,rate:S.rate,mem:S.mem,dwx:S.dwx||'clear'};localStorage.setItem(TRIP.key+':reh',JSON.stringify(seed));localStorage.setItem(RK,JSON.stringify({i:+d.reh,on:localYmd()}))}}catch(e){}
+    location.reload()}
   else if(d.trip){if(window.TripLock&&d.trip!==TripLock.current)TripLock.pick(d.trip)}
   else if(d.sw){if(S.sw[d.sw]!==d.v){S.sw[d.sw]=d.v;save();location.reload()}}
   else if(d.sos){sosOpen=sosOpen===+d.sos?-1:+d.sos;render()}

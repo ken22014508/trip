@@ -690,3 +690,6 @@ body.th-glass .desk .kv{margin-top:10px;padding:16px 18px}
 #sheet .hop .mini{height:34px;padding:0 13px;font-size:14px;white-space:nowrap;align-self:center}
 #sheet .grid.one{grid-template-columns:1fr;margin-top:14px}
 #sheet .grid.one .gb{white-space:nowrap;justify-content:center}
+.pv.reh{display:flex;align-items:center;gap:10px;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.pv.reh span{font-size:13px;font-weight:700;color:#FFB020;letter-spacing:.04em}
+.pv.reh b{flex:1;font-size:15px}
