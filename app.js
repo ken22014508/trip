@@ -603,22 +603,13 @@ function dropFx(btn){var br=btn.getBoundingClientRect(),p=lastPt&&Date.now()-las
 function mkOld(){var o=app.cloneNode(true);o.classList.add('xold');o.setAttribute('aria-hidden','true');
   o.querySelectorAll('[id]').forEach(function(e){e.removeAttribute('id')});o.querySelectorAll('.burst').forEach(function(e){e.classList.remove('burst')});
   app.parentNode.insertBefore(o,app.nextSibling);o.scrollTop=app.scrollTop;document.body.classList.add('xfade');return o}
-function waveFx(fx,old){var now=performance.now(),BLK='.stage > :not(.hd), .hd > *',
-    del=function(e){var r=e.getBoundingClientRect(),d=Math.hypot(r.left+r.width/2-fx.x,r.top+r.height/2-fx.y)/fx.v-(now-fx.t0)/1000;return Math.max(0,Math.min(.9,d))},
-    sig=function(e){var r=e.getBoundingClientRect();return e.tagName+'.'+e.className+'|'+e.textContent.replace(/\s+/g,'')+'|'+Math.round(r.top)+'|'+Math.round(r.left)},
-    nb=[].slice.call(app.querySelectorAll(BLK)),ob=old?[].slice.call(old.querySelectorAll(BLK)):[],pool={},maxD=0,go=function(e,cls,d){e.style.setProperty('--wd',d.toFixed(3)+'s');e.classList.add(cls);maxD=Math.max(maxD,d)};
-  ob.forEach(function(e){var k=sig(e);(pool[k]=pool[k]||[]).push(e)});
-  nb.forEach(function(e){var m=(pool[sig(e)]||[]).shift();if(m){m.classList.add('same');return}
-    var d=del(e);
-    if(e.classList.contains('dial')){e.querySelectorAll('.lab,.rem').forEach(function(x){go(x,'wvi',d)});var bg=e.querySelector('.big');if(bg&&!bg.querySelector('.roll'))chars(bg,d);maxD=Math.max(maxD,d)}
-    else go(e,'wvi',d)});
-  ob.forEach(function(e){if(!e.classList.contains('same'))go(e,'wvo',del(e))});
-  if(old&&!ob.length)go(old,'wvo',.15);
-  setTimeout(function(){if(old&&old.parentNode)old.remove();document.body.classList.remove('xfade')},(maxD+.5)*1000)}
-/* 轉盤的大字：一個字一個字浮上來（沒有模糊） */
-function chars(el,d){var w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT,null),ts=[],x,n=0;while(x=w.nextNode()){if(x.parentNode.closest('.roll,svg'))continue;if(x.nodeValue.trim())ts.push(x)}
-  ts.forEach(function(tn){var f=document.createDocumentFragment();Array.from(tn.nodeValue).forEach(function(c){if(/\s/.test(c)&&c!=='　'){f.appendChild(document.createTextNode(c));return}
-    var sp=document.createElement('span');sp.className='ch';sp.style.setProperty('--i',Math.min(n++,20));sp.style.setProperty('--wd',d.toFixed(3)+'s');sp.textContent=c;f.appendChild(sp)});tn.parentNode.replaceChild(f,tn)})}
+/* 圓形換頁：舊畫面的複本挖一個跟著水波長大的圓洞（CSS mask），洞裡露出新畫面；sky.js 的玻璃用同一個圓。兩頁不會重疊 */
+function waveFx(fx,old){if(!old)return;var E=18,far=0;[[0,0],[innerWidth,0],[0,innerHeight],[innerWidth,innerHeight]].forEach(function(c){far=Math.max(far,Math.hypot(c[0]-fx.x,c[1]-fx.y))});
+  var done=false,end=function(){if(done)return;done=true;if(old.parentNode)old.remove();document.body.classList.remove('xfade');if(window.Sky&&Sky.wave)Sky.wave(null)};
+  (function step(){if(done)return;var R=(performance.now()-fx.t0)/1000*fx.v,m='radial-gradient(circle at '+fx.x.toFixed(1)+'px '+fx.y.toFixed(1)+'px, transparent '+Math.max(0,R-E).toFixed(1)+'px, #000 '+(R+E).toFixed(1)+'px)';
+    old.style.webkitMaskImage=m;old.style.maskImage=m;if(window.Sky&&Sky.wave)Sky.wave(fx.x,fx.y,R);
+    if(R-E>far)end();else requestAnimationFrame(step)})();
+  setTimeout(end,4000)}
 function render(){
   document.body.dataset.tab=G?'guest':tab;skyRender();
   if(G){tabsEl.hidden=true;app.innerHTML=vGuest();drawSheet();return}
