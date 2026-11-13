@@ -368,6 +368,9 @@ function vMore(){var bk=backBtn();
      +'<h2>實際時間和筆記</h2><textarea id="lg" readonly aria-label="實際紀錄">'+esc(log||'還沒有紀錄')+'</textarea><div class="row"><button class="gb" data-copy="lg">複製</button></div>'
      +'<h2>重來</h2><div class="row"><button class="gb" data-reset="1">清掉今天的進度</button></div><h2>換手機</h2><textarea id="bk" class="mono" aria-label="備份資料">'+esc(JSON.stringify(S))+'</textarea><div class="row"><button class="gb" data-copy="bk">複製</button><button class="gb" data-imp="1">匯入</button><span class="sub" id="cpm"></span></div>'
      +(window.TripLock&&TripLock.sealed?'<h2>密碼</h2><p class="sub">這台手機記得行程密碼。借給別人或手機要送修前，可以先鎖起來，之後打開要重新輸入。</p><div class="row"><button class="gb" data-lock="1">鎖起來</button></div>':'')}
+  if(sub==='trips'){var TL=window.TripLock||{},md=function(x){return x.slice(5).replace('-','/')};
+    return '<header class="hd">'+bk+'<div><b>換行程</b></div></header><p class="sub">打開 app 時會自動選正在進行、或最近要出發的那趟。每趟的進度和記帳各自存。</p><div class="menu">'
+     +(TL.trips||[]).map(function(t){var on=t.key===TL.current;return '<button data-trip="'+esc(t.key)+'"'+(on?' aria-current="true"':'')+'><span>'+esc(t.title)+'<small>'+md(t.start)+' ～ '+md(t.end)+(on?'　現在這趟':'')+'</small></span>'+(on?ico('check'):ico('chev'))+'</button>'}).join('')+'</div>'}
   if(sub==='install')return '<header class="hd">'+bk+'<div><b>裝到主畫面</b></div></header>'
      +'<div class="panel"><div class="lbl">iPhone　Safari</div><ol><li>分享鈕</li><li>加入主畫面</li></ol></div>'
      +'<div class="panel"><div class="lbl">Android　Chrome</div><ol><li>右上角選單</li><li>安裝應用程式</li></ol></div>';
@@ -379,7 +382,7 @@ function vMore(){var bk=backBtn();
    +(k0&&HOTELS[k0]?'<button class="tonight" data-desk="'+k0+'"><span>今晚住</span><b>'+esc(HOTELS[k0].jp)+'</b><i>給櫃檯看'+ico('chev')+'</i></button>':'')
    +'<div class="menu">'
    +'<button data-sheet="theme"><span>外觀<small>'+THEMES.filter(function(x){return x[0]===S.theme})[0][1]+'</small></span>'+ico('chev')+'</button>'
-   +it('prep','出發前')+it('data','紀錄和備份')+it('install','裝到主畫面')+'</div>'+'<p class="ver"><button class="verb" data-diag="1">版本 <span id="ver">'+esc(VER)+'</span></button></p>'}
+   +it('prep','出發前')+((window.TripLock&&TripLock.trips.length>1)?it('trips','換行程'):'')+it('data','紀錄和備份')+it('install','裝到主畫面')+'</div>'+'<p class="ver"><button class="verb" data-diag="1">版本 <span id="ver">'+esc(VER)+'</span></button></p>'}
 /* 版本：顯示這台手機現在用的快取版號（sw.js 的 trip-vNN），確認新版有沒有生效 */
 var VER='…';try{caches.keys().then(function(ks){var k=ks.filter(function(x){return /^trip-v\d+$/.test(x)}).sort(function(a,b){return +a.slice(6)-+b.slice(6)}).pop();VER=k?k.replace('trip-',''):'未快取';var e=document.getElementById('ver');if(e)e.textContent=VER})}catch(e){VER='—'}
 /* 檢查畫面：點版號打開。列出手機實際回報的尺寸，截圖給 Claude 判斷底部那一條的原因。紅線＝網頁框的底，黃框＝整個螢幕 */
@@ -531,6 +534,7 @@ document.addEventListener('click',function(e){
     render()}
   else if(d.diag)diag()
   else if(d.lock){if(window.TripLock)TripLock.forget()}
+  else if(d.trip){if(window.TripLock&&d.trip!==TripLock.current)TripLock.pick(d.trip)}
   else if(d.sw){if(S.sw[d.sw]!==d.v){S.sw[d.sw]=d.v;save();location.reload()}}
   else if(d.sos){sosOpen=sosOpen===+d.sos?-1:+d.sos;render()}
   else if(d.payer){[].forEach.call(document.querySelectorAll('#epc .chip'),function(b){var on=b===t;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)})}
