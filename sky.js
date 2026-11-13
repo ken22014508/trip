@@ -376,7 +376,13 @@ function drawComp(t){drawDrops(t);var P=PR.comp,u=P.u;setU(P,t);gl.uniform1f(u.u
   gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,txO);gl.uniform1i(u.uOcc,1);
   gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,wtex);if(wDirty){gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,wpc);wDirty=false}gl.uniform1i(u.uWp,2);
   gl.uniform1i(u.uN,nR);if(nR){gl.uniform1fv(u.uOp,OPB);gl.uniform4fv(u.uR,RB);gl.uniform4fv(u.uC,CB);gl.uniform1fv(u.uRad,RD);gl.uniform4fv(u.uK,KB)}
-  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,cv.width,cv.height);gl.drawArrays(gl.TRIANGLES,0,3)}
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,cv.width,cv.height);gl.drawArrays(gl.TRIANGLES,0,3);if(++BGK%30===1)edgeBg()}
+/* iPhone 主畫面 app 有時不讓網頁畫到螢幕最底（大約少一個狀態列的高度），那一條只會塗 html 的底色。
+   每 30 張取一次畫面可見最底邊的顏色，當成 html 底色，那一條就跟天空接起來。任何型號都照它自己畫出來的顏色 */
+var BGK=0,BGPX=new Uint8Array(4),lastBg='';
+function edgeBg(){try{var y=Math.max(0,cv.height-Math.round(Math.min(innerHeight,H)*cv.height/H)),r=0,g=0,b=0;
+  for(var i=1;i<=5;i++){gl.readPixels(Math.round(cv.width*i/6),y,1,1,gl.RGBA,gl.UNSIGNED_BYTE,BGPX);r+=BGPX[0];g+=BGPX[1];b+=BGPX[2]}
+  var c='rgb('+(r/5|0)+','+(g/5|0)+','+(b/5|0)+')';if(c!==lastBg){lastBg=c;document.documentElement.style.backgroundColor=c}}catch(e){}}
 /* 省電分級：天氣在變、拖動、下雨下雪時全速；晴天靜止時天空每秒 10 張、合成看有沒有東西在動 */
 var LW=0,LH=0,CK=0;
 function loop(ts){if(!on)return;raf=requestAnimationFrame(loop);if(++CK%20===0)chk();if(wpx)wipeDecay(ts);
@@ -424,7 +430,7 @@ return {
   set:function(p){if(typeof SunCalc==='undefined')return;S.scape=p.scape==='sea'?1:p.scape==='city'?2:0;var k=[p.scape,p.lat,p.lng,Math.round(p.at.getTime()/60000),JSON.stringify(p.wx||{})].join('|');
     if(k===S.k)return;S.k=k;S.r=compute(p);paintBody(S.r);T=targets(S.r);if(!A)step(0);if(!on||calm)poke()},
   poke:function(){if(on)requestAnimationFrame(poke)},
-  on:function(v){v=!!v&&!document.hidden;document.body.classList.toggle('glgl',!!v&&GL_OK);if(v===on)return;on=v;
+  on:function(v){v=!!v&&!document.hidden;document.body.classList.toggle('glgl',!!v&&GL_OK);if(!v){document.documentElement.style.backgroundColor='';lastBg=''}if(v===on)return;on=v;
     if(on){if(calm)poke();else raf=requestAnimationFrame(loop)}else{cancelAnimationFrame(raf);dctx&&dctx.clearRect(0,0,W,H)}},
   info:function(){return S.r}
 }})();
