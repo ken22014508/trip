@@ -12,7 +12,7 @@ html{-webkit-text-size-adjust:100%;background:#2C4F7C}
 body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.5 system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none}
 body.lock{overflow:hidden}
 body:not(.th-glass)[data-tab=now]{background:linear-gradient(180deg,var(--sky1,#101C30),var(--sky2,#1B2B45)) fixed}
-#fx{position:fixed;inset:0;width:100%;height:100%;min-height:100lvh;z-index:0;pointer-events:none;display:none}body.glgl #fx{display:block}
+#fx{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;display:none}body.glgl #fx{display:block}
 #app{position:relative;z-index:1}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer;border:0;background:none;padding:0}
@@ -356,7 +356,7 @@ a.rowb{text-decoration:none;flex-direction:column;align-items:flex-start;justify
 }
 
 /* ======================= 外觀：天空玻璃 ======================= */
-#drops{position:fixed;inset:0;width:100%;height:100%;min-height:100lvh;z-index:850;pointer-events:none}
+#drops{position:fixed;inset:0;width:100%;height:100%;z-index:850;pointer-events:none}
 .pvrow{display:flex;gap:8px;width:100%;align-items:center;margin-bottom:8px}.pvrow .pv{margin:0;flex:1}
 .pvw{flex:none;height:36px;min-width:52px;padding:0 12px;border-radius:18px;font-size:14px;font-weight:600}
 body.th-glass{
@@ -643,8 +643,6 @@ body.locked #tabs,body.locked #fx,body.locked #drops{display:none}
 .lockbox button{width:100%;height:52px;margin-top:12px;border:0;border-radius:26px;font-size:18px;font-weight:700;color:#0B1626;
   background:radial-gradient(90% 70% at 40% 20%,#fff,rgba(255,255,255,.75) 70%),#8FE0FF;box-shadow:inset 0 -2px 4px rgba(0,40,80,.2),0 6px 16px -6px rgba(0,10,30,.5)}
 .lockbox button:disabled{opacity:.7}
-/* iPhone 主畫面 app 有時回報的視窗高度比螢幕短（底部露出底色）。sky.js 把這台手機的螢幕高度寫進 --fullh，畫布從頂端畫到螢幕最底；座標從頂端算，玻璃位置不受影響 */
-#fx,#drops{top:0;bottom:auto;height:max(100lvh,var(--fullh,0px));min-height:0}
 .ver{text-align:center;font-size:12px;opacity:.55;margin:18px 0 0}
 /* 整頁固定不動：html/body 不捲、不回彈，只有 #app 裡面捲。iPhone 就不會整頁被拉動或縮放，畫布和玻璃也不會跟著跑 */
 html,body{height:100%;overflow:hidden;overscroll-behavior:none}

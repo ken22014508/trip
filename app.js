@@ -381,7 +381,7 @@ function vMore(){var bk=backBtn();
    +'<button data-sheet="theme"><span>外觀<small>'+THEMES.filter(function(x){return x[0]===S.theme})[0][1]+'</small></span>'+ico('chev')+'</button>'
    +it('prep','出發前')+it('data','紀錄和備份')+it('install','裝到主畫面')+'</div>'+'<p class="ver"><button class="verb" data-diag="1">版本 <span id="ver">'+esc(VER)+'</span></button></p>'}
 /* 版本：顯示這台手機現在用的快取版號（sw.js 的 trip-vNN），確認新版有沒有生效 */
-var VER='…';try{caches.keys().then(function(ks){var k=ks.filter(function(x){return /^trip-v/.test(x)}).sort().pop();VER=k?k.replace('trip-',''):'未快取';var e=document.getElementById('ver');if(e)e.textContent=VER})}catch(e){VER='—'}
+var VER='…';try{caches.keys().then(function(ks){var k=ks.filter(function(x){return /^trip-v\d+$/.test(x)}).sort(function(a,b){return +a.slice(6)-+b.slice(6)}).pop();VER=k?k.replace('trip-',''):'未快取';var e=document.getElementById('ver');if(e)e.textContent=VER})}catch(e){VER='—'}
 /* 檢查畫面：點版號打開。列出手機實際回報的尺寸，截圖給 Claude 判斷底部那一條的原因。紅線＝網頁框的底，黃框＝整個螢幕 */
 function diag(){var old=document.getElementById('diag');if(old){old.remove();return}
   function probe(css){var e=document.createElement('div');e.style.cssText='position:fixed;left:0;top:0;width:1px;visibility:hidden;'+css;document.body.appendChild(e);var r=e.getBoundingClientRect(),cs=getComputedStyle(e);var o={h:Math.round(r.height),pt:cs.paddingTop,pb:cs.paddingBottom};e.remove();return o}

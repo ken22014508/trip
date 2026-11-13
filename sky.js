@@ -285,9 +285,6 @@ var COMP_FS=HEAD+['',
 ' float sh=(smoothstep(.0,.5,1.-abs((p.x/uV.x+p.y/uV.y*.6)-.55)*3.)*.05+smoothstep(.0,.3,1.-abs((p.x/uV.x+p.y/uV.y*.6)-.82)*9.)*.03)*(1.-uMist*.7);col+=vec3(sh)*(1.-uNight*.6);',
 ' col=1.-exp(-col*1.1);col=pow(col,vec3(1./1.9));',
 ' float ly=dot(col,vec3(.3,.59,.11));col*=1.-mix(.2*smoothstep(.62,1.,ly),.42*smoothstep(.4,.95,ly)*(1.-uDay),gm*(1.-tk));',
-/* 「到了 / 走了」：一道帶一點彩虹色的光斜斜掃過所有玻璃，前緣略暗，白玻璃上也看得出來 */
-' if(uSwp<1.&&gm>.01){float bp=(p.x/uV.x*.6+p.y/uV.y)*.62;float bd=bp-(uSwp*1.5-.25);float band=smoothstep(.1,0.,abs(bd));vec3 ir=.5+.5*cos(6.283*(bp*2.5+vec3(0.,.33,.67)));',
-'  col=col*(1.-.22*smoothstep(.16,.05,bd)*smoothstep(-.02,.05,bd)*gm)+mix(vec3(1.),ir,.55)*band*.45*gm*(1.-uSwp*.5);}',
 ' col=col*(1.-max(-drw,0.)*.16)+vec3(1.,.99,.96)*(max(drw,0.)*.3+drf*.55);',
 ' col=col*(1.-max(-gRip,0.)*.22)+vec3(1.)*max(gRip,0.)*.28;',
 ' col+=vec3(.75,.82,.9)*rn*uRain*inG+vec3(1.)*sn*uSnow*inG*.85;',
@@ -322,9 +319,7 @@ function sy(alt){var hz=H*.64;return hz-clamp(alt,-89,89)/75*hz}
 function dir(az,alt){az*=Math.PI/180;alt*=Math.PI/180;return [Math.sin(az)*Math.cos(alt),Math.sin(alt),Math.cos(az)*Math.cos(alt)]}
 /* 解析度：合成用手機原生（最多 2 倍），天空用低解析度。太慢時一級一級往下降 */
 var QL=[[2,.8],[1.5,.7],[1.25,.6],[1,.5]];
-/* 這台手機的螢幕高度（直拿取長邊、橫拿取短邊）。只在觸控裝置上用，電腦就照視窗大小 */
-function fullH(){var h=innerHeight;try{if(window.screen&&matchMedia('(pointer:coarse)').matches){var a=screen.width,b=screen.height;h=Math.max(h,innerWidth>innerHeight?Math.min(a,b):Math.max(a,b))}}catch(e){}document.documentElement.style.setProperty('--fullh',h+'px')}
-function size(){if(!cv)return;fullH();DPR=window.devicePixelRatio||1;var q=QL[Q];RS=Math.min(DPR,q[0]);SR=Math.min(q[1],DPR*.5+.2);W=cv.clientWidth||innerWidth;H=cv.clientHeight||innerHeight;LW=W;LH=H;
+function size(){if(!cv)return;DPR=window.devicePixelRatio||1;var q=QL[Q];RS=Math.min(DPR,q[0]);SR=Math.min(q[1],DPR*.5+.2);W=cv.clientWidth||innerWidth;H=cv.clientHeight||innerHeight;LW=W;LH=H;
   cv.width=Math.round(W*RS);cv.height=Math.round(H*RS);drops.width=drops.height=1;
   if(gl){var w=Math.max(8,Math.round(W*SR)),h=Math.max(8,Math.round(H*SR));if(w!==SW||h!==SH){SW=w;SH=h;if(txS)gl.deleteTexture(txS);if(fbS)gl.deleteFramebuffer(fbS);txS=mkTex(SW,SH,true);fbS=mkFB(txS)}
     var dw=Math.max(8,Math.round(W*RS*.5)),dh=Math.max(8,Math.round(H*RS*.5));if(dw!==DW||dh!==DH){DW=dw;DH=dh;if(txD)gl.deleteTexture(txD);if(fbD)gl.deleteFramebuffer(fbD);txD=mkTex(DW,DH,false);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);fbD=mkFB(txD)}}
@@ -382,13 +377,7 @@ function drawComp(t){drawDrops(t);var P=PR.comp,u=P.u;setU(P,t);gl.uniform1f(u.u
   gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,txO);gl.uniform1i(u.uOcc,1);
   gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,wtex);if(wDirty){gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,wpc);wDirty=false}gl.uniform1i(u.uWp,2);
   gl.uniform1i(u.uN,nR);if(nR){gl.uniform1fv(u.uOp,OPB);gl.uniform4fv(u.uR,RB);gl.uniform4fv(u.uC,CB);gl.uniform1fv(u.uRad,RD);gl.uniform4fv(u.uK,KB)}
-  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,cv.width,cv.height);gl.drawArrays(gl.TRIANGLES,0,3);if(++BGK%30===1)edgeBg()}
-/* iPhone 主畫面 app 有時不讓網頁畫到螢幕最底（大約少一個狀態列的高度），那一條只會塗 html 的底色。
-   每 30 張取一次畫面可見最底邊的顏色，當成 html 底色，那一條就跟天空接起來。任何型號都照它自己畫出來的顏色 */
-var BGK=0,BGPX=new Uint8Array(4),lastBg='';
-function edgeBg(){try{var y=Math.max(0,cv.height-Math.round(Math.min(innerHeight,H)*cv.height/H)),r=0,g=0,b=0;
-  for(var i=1;i<=5;i++){gl.readPixels(Math.round(cv.width*i/6),y,1,1,gl.RGBA,gl.UNSIGNED_BYTE,BGPX);r+=BGPX[0];g+=BGPX[1];b+=BGPX[2]}
-  var c='rgb('+(r/5|0)+','+(g/5|0)+','+(b/5|0)+')';if(c!==lastBg){lastBg=c;document.documentElement.style.backgroundColor=c}}catch(e){}}
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,cv.width,cv.height);gl.drawArrays(gl.TRIANGLES,0,3)}
 /* 省電分級：天氣在變、拖動、下雨下雪時全速；晴天靜止時天空每秒 10 張、合成看有沒有東西在動 */
 var LW=0,LH=0,CK=0;
 function loop(ts){if(!on)return;raf=requestAnimationFrame(loop);if(++CK%20===0)chk();if(wpx)wipeDecay(ts);
@@ -437,7 +426,7 @@ return {
   set:function(p){if(typeof SunCalc==='undefined')return;S.scape=p.scape==='sea'?1:p.scape==='city'?2:0;var k=[p.scape,p.lat,p.lng,Math.round(p.at.getTime()/60000),JSON.stringify(p.wx||{})].join('|');
     if(k===S.k)return;S.k=k;S.r=compute(p);paintBody(S.r);T=targets(S.r);if(!A)step(0);if(!on||calm)poke()},
   poke:function(){if(on)requestAnimationFrame(poke)},
-  on:function(v){v=!!v&&!document.hidden;document.body.classList.toggle('glgl',!!v&&GL_OK);if(!v){document.documentElement.style.backgroundColor='';lastBg=''}if(v===on)return;on=v;
+  on:function(v){v=!!v&&!document.hidden;document.body.classList.toggle('glgl',!!v&&GL_OK);if(v===on)return;on=v;
     if(on){if(calm)poke();else raf=requestAnimationFrame(loop)}else{cancelAnimationFrame(raf);dctx&&dctx.clearRect(0,0,W,H)}},
   info:function(){return S.r}
 }})();
