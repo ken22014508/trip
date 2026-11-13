@@ -458,6 +458,8 @@ function skyRender(){var glass=S.theme==='glass'&&!!window.Sky;document.body.cla
 var planAnim=true,lastTab='',arrFx=false;
 /* 「到了」之後：新畫面的字一個一個從模糊、放大、略低的位置浮上來，跟著水波的節奏，從上往下 */
 var FXSEL='.hd b,.hd span,.dial .lab,.dial .big,.dial .rem,.alert .lab,.alert b,.alert .why,.bind,.ref,.peek span,.peek b,.pb,.askbar span';
+/* 「到了／走了」共用：水滴落在按下的按鈕上，換畫面時舊的模糊淡出、新的字逐字浮上來 */
+function dropFx(btn,ms){var br=btn.getBoundingClientRect();if(window.Sky&&Sky.drop)Sky.drop(br.left+br.width/2,br.top+br.height/2);arrFx=true;var de=document.documentElement;de.classList.add('vt-drop');setTimeout(function(){de.classList.remove('vt-drop')},ms)}
 function charFx(){if(window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches)return;var n=0;
   app.querySelectorAll(FXSEL).forEach(function(el){if(el.closest('.roll'))return;var w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT,null),ts=[],x;
     while(x=w.nextNode()){if(x.parentNode.closest('.roll,svg,.ch'))continue;if(x.nodeValue.trim())ts.push(x)}
@@ -498,7 +500,7 @@ document.addEventListener('click',function(e){
   else if(d.grp){var gp=d.grp.split(':');mem(gp[0]).g=+gp[1];save();render()}
   else if(d.delm){S.mem=S.mem.filter(function(x){return x.id!==d.delm});save();render()}
   else if(d.addm){S.mem.push({id:'m'+Date.now().toString(36),n:'新成員',g:0});save();render()}
-  else if(d.done){vib([12,40,18]);if(window.Sky&&Sky.sweep)Sky.sweep();whatIf=null;id=d.done;var m0=vmOf(i),dl=document.querySelector('.dial'),fin=function(){
+  else if(d.done){vib([12,40,18]);dropFx(t,1200);whatIf=null;id=d.done;var m0=vmOf(i),dl=document.querySelector('.dial'),fin=function(){
       if(m0.st.here===id)finish(i,id);else S.here[i]={id:id,t:nowMin(i)};save();paint()};
     if(dl&&!calm&&tab==='now'){dl.classList.add('burst');setTimeout(fin,260)}else fin()}
   else if(d.undo){k=K(i,d.undo);delete S.done[k];
@@ -511,7 +513,7 @@ document.addEventListener('click',function(e){
   else if(d.tilt){DeviceOrientationEvent.requestPermission().then(function(r){tiltMsg=r==='granted'?'已開啟，傾斜手機看看':'沒有開啟（可以到 Safari 設定允許動作與方向）';render()},function(){tiltMsg='這裡無法開啟';render()})}
   else if(d.theme){S.theme=d.theme;save();vib();render()}
   else if(d.dwx){var di=DWX.map(function(x){return x[0]}).indexOf(S.dwx||'');S.dwx=DWX[(di+1)%DWX.length][0];save();render()}
-  else if(d.arrive){vib([12,40,18]);var br=t.getBoundingClientRect();if(window.Sky&&Sky.drop)Sky.drop(br.left+br.width/2,br.top+br.height/2);arrFx=true;var de=document.documentElement;de.classList.add('vt-drop');setTimeout(function(){de.classList.remove('vt-drop')},900);S.here[i]={id:d.arrive,t:nowMin(i)};whatIf=null;save();paint()}
+  else if(d.arrive){vib([12,40,18]);dropFx(t,900);S.here[i]={id:d.arrive,t:nowMin(i)};whatIf=null;save();paint()}
   else if(d.skipit){vib();S.drop[K(i,d.skipit)]=1;save();paint()}
   else if(d.ext){id=d.ext;k=K(i,id);var it=item(i,id),v=+d.v;if(v<0&&S.ext[k]>0)S.ext[k]=Math.max(0,S.ext[k]+v);else if(v<0){if(it.min!=null)S.cut[k]=1}else if(S.cut[k])delete S.cut[k];else S.ext[k]=(S.ext[k]||0)+v;save();render()}
   else if(d.rx){vib();var r=lastRx[+d.rx];if(r){applyRx(i,r);save();paint()}}
