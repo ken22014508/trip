@@ -485,7 +485,7 @@ function sheetHtml(){if(!sh)return '';var i=cur,D=DAYS[i],h='';
     D.items.forEach(function(it){var k=K(i,it.id);if(S.done[k]!=null||it.id===st.here)return;
       if(S.drop[k]){h+='<div class="rowb"><b class="off">'+esc(it.name)+'</b><button class="mini" data-chg="undrop" data-id="'+it.id+'">加回來</button></div>';return}
       h+='<div class="rowb"><b>'+esc(it.name)+'</b><button class="mini" data-chg="goto" data-id="'+it.id+'">直接去</button>'+(it.kind==='wall'&&it.id==='home'?'':'<button class="mini" data-chg="drop" data-id="'+it.id+'">不去了</button>')+'</div>'});
-    return h+'<a class="rowb" href="'+askUrl('')+'" target="_blank" rel="noopener"><b>問 Claude</b><span>其他狀況，帶著現在的行程去問</span></a>'}
+    return h+'<button class="rowb" data-sheet="askq"><b>問 Claude</b><span>其他狀況：打一句話，連同現在的行程一起問</span></button>'}
   if(sh.t==='stop'){var it=item(i,sh.id);if(!it)return '';var k=K(i,it.id),dn=S.done[k]!=null,dr=!!S.drop[k],stay=(S.cut[k]&&it.min!=null?it.min:(it.stay||0))+(S.ext[k]||0);
     h='<div class="ty">'+kindTxt(it)+'</div><div class="st">'+esc(it.name)+'</div>'+(it.at?'<div class="lt">'+it.at+' 前要到'+(it.cons?'（'+esc(it.cons)+'）':'')+'</div>':'')+(it.fallback?'<p class="sub">備案：'+esc(it.fallback)+'</p>':'');
     if(!dn&&!dr&&it.stay)h+='<div class="stepper"><span>預計停留（參考）</span><button class="ib" data-ext="'+it.id+'" data-v="-15" aria-label="少 15 分"'+(stay<=(it.min||0)?' disabled':'')+'>−</button><b class="num">'+stay+' 分</b><button class="ib" data-ext="'+it.id+'" data-v="15" aria-label="多 15 分">+</button></div>';
@@ -513,6 +513,10 @@ function sheetHtml(){if(!sh)return '';var i=cur,D=DAYS[i],h='';
     if(A.err)return '<div class="ty">問 Claude</div><div class="st">沒有問到</div><p>'+esc(A.err)+'</p><div class="grid"><button class="gb" data-askdone="1">算了</button>'+fb+'</div>';
     return '<div class="ty">問 Claude</div><div class="st">正在問…　<span class="num" id="askel">0:00</span></div><p class="sub">'+esc(A.q||'現在的狀況')+'</p><p class="sub">Claude 在雲端查，通常 2～3 分鐘。可以先關掉這個面板做別的事，好了會自己跳出來。</p>'
       +'<div class="grid"><button class="gb" data-close="1">先關掉</button>'+fb+'</div>'}
+  if(sh.t==='askq')return '<div class="ty">問 Claude</div><div class="st">想問什麼？</div>'
+     +'<textarea id="askqt" rows="3" placeholder="例如：下雨了，下午改去哪裡比較好？" aria-label="想問 Claude 的問題">'+esc(sh.q||'')+'</textarea>'
+     +'<p class="sub">'+(askCfg()?'會連同現在的行程一起送出，答案大約 2～3 分鐘後在 app 裡跳出來。':'會打開 Claude app，問題和現在的行程都幫你帶好了。（到「更多 → 問 Claude 設定」設定好，就能留在 app 裡問）')+'</p>'
+     +'<div class="grid"><button class="gb" data-close="1">取消</button><button class="gb pri" data-askq="1">問</button></div>';
   if(sh.t==='rtin')return '<div class="ty">Claude 查到的班次</div><div class="st">貼上 Claude 的回答</div><p class="sub">在 Claude 那邊按回答下面的「複製」，回來長按下面的框貼上。整段貼上就好，app 會自己找出班次。</p>'
      +'<textarea id="rtin" rows="5" aria-label="貼上 Claude 的回答"></textarea>'+(sh.msg?'<p class="lt">'+esc(sh.msg)+'</p>':'')
      +'<div class="grid"><button class="gb" data-close="1">取消</button><button class="gb pri" data-rtread="1">讀取</button></div>';
@@ -631,6 +635,8 @@ document.addEventListener('click',function(e){
     location.reload()}
   else if(d.rtok){if(RT&&RT.legs){var o2=S.rt[RT.d]=S.rt[RT.d]||{};Object.keys(RT.legs).forEach(function(lg){var have={};(o2[lg]=o2[lg]||[]).forEach(function(r){have[r[0]]=1});RT.legs[lg].forEach(function(r){if(!have[r[0]])o2[lg].push(r)})});save()}
     clearHash();location.reload()}
+  else if(d.askq){var qt=document.getElementById('askqt'),qq=(qt&&qt.value||'').trim();if(!qq){if(qt)qt.focus();return}
+    if(askCfg())askStart(qq,null);else{window.open(askUrl(qq),'_blank','noopener');sh=null;render()}}
   else if(d.askin){askStart(d.q,d.ex?d.ex.split(','):null)}
   else if(d.askdone){delete S.ask;save();sh=null;render()}
   else if(d.askr){var rr=S.ask&&S.ask.res&&(rtFrom(S.ask.res.r)||S.ask.res.r.replace(/^#?r=/,''));if(rr){parseRt(rr);sh={t:'rt'};render()}}
