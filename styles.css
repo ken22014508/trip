@@ -654,8 +654,9 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none}
 #diag .dg-box{position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top) + 10px);pointer-events:auto;background:rgba(0,0,0,.85);color:#fff;border-radius:14px;padding:12px 14px;font-size:13px;line-height:1.35}
 #diag table{width:100%;border-collapse:collapse;margin:6px 0}#diag th{text-align:left;font-weight:400;color:#aaa;padding:2px 8px 2px 0;white-space:nowrap}#diag td{font-family:ui-monospace,monospace;word-break:break-all}
 #diag p{margin:4px 0 8px;color:#fc0}#diag button{width:100%;height:40px;border:0;border-radius:20px;background:#fff;color:#000;font-weight:700}
-/* D3「到了／走了」：舊畫面的複本疊在上面，app.js 每一幀用圓形 mask 挖洞，洞跟著水波長大 */
-.xold{z-index:2!important;pointer-events:none!important;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
+/* D3「到了／走了」兩圈換頁：舊畫面的複本疊在上面；app.js 每一幀用圓形 mask：複本只留外圈外、#app 只留內圈內 */
+.xold{z-index:2!important;pointer-events:none!important}
+.xold,#app{-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
 .xold *{animation:none!important;transition:none!important}
 /* ===== 給櫃檯看：跟其他面板一樣是磨砂玻璃，看得到後面的天空；字維持大而清楚 ===== */
 body.th-glass #sheet.full{background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.03)),rgba(12,22,40,.72);-webkit-backdrop-filter:blur(34px) saturate(170%);backdrop-filter:blur(34px) saturate(170%);color:#fff}

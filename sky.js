@@ -39,7 +39,7 @@ function compute(p){var r={};
    3. 合成（手機原生解析度）：玻璃面板、液態玻璃按鈕、窗上的水滴和霜、星星、雨絲雪花。
       霧面＝讀貼圖的模糊層；液態玻璃＝讀清楚的層再折射。所以按鈕邊緣是清楚的，天空每個像素只算一次。
    天氣、時間都是緩動過去的（下雨慢慢下起來，雨停水滴留在窗上慢慢乾）。 */
-var SWP=0,DRP={x:0,y:0,t:0},WV={x:0,y:0,r:0,on:0},RIP={x:0,y:0,t:0,s:1},OPB=new Float32Array(24),FL={v:0,next:0},gl=null,GL_OK=false,PR={},RS=1,SR=.8,Q=0,sig='',clipC=new WeakMap(),radC=new WeakMap(),slow=0,lastT=0,lastSky=0,lastComp=0,A=null,T=null,jump=true;
+var SWP=0,DRP={x:0,y:0,t:0},WV={x:0,y:0,ro:0,rn:0,on:0},RIP={x:0,y:0,t:0,s:1},OPB=new Float32Array(24),FL={v:0,next:0},gl=null,GL_OK=false,PR={},RS=1,SR=.8,Q=0,sig='',clipC=new WeakMap(),radC=new WeakMap(),slow=0,lastT=0,lastSky=0,lastComp=0,A=null,T=null,jump=true;
 var fbD,txD,DW=0,DH=0,fbS,txS,SW=0,SH=0,fbO,txO,wpc,wpx,wtex,wDirty=false,wAny=false,wLast=0,wN=0,wPrev=null,wDown=null,wMoved=false;
 var LQ='.opt:not(.ghost),.pb,.tile,.gb,.gb2,.chip,.ib,.pvw,.wxb,.bind,.mini,.days button,.askbar,.opt.ghost,.stepper,.tel';
 var GSEL='.dial,.opt:not(.ghost),.pb,.panel,.menu,.tile,.tonight,.strip,.askbar,.bind,.days button,.pv,.pvw,.wxb,.gb,.gb2,.opt.ghost,.chip,.ib,.mrow input,input[type=text],input[type=number],input[type=time],textarea,.stepper,.tel,.mini';
@@ -205,8 +205,8 @@ var COMP_FS=HEAD+['',
 '  vec2 g=floor(p/34.);float h=h21(g+71.);if(h>.55){vec2 cc=(g+.2+.6*vec2(h21(g+5.),h21(g+6.)))*34.;vec2 v=p-cc;float r=length(v);float life=fract(uT*.02+h*7.);float al=smoothstep(0.,.08,life)*smoothstep(1.,.6,life);',
 '   float a=atan(v.y,v.x);float sz=2.5+h*4.;float arm=smoothstep(.75,1.,abs(cos(a*3.+h*6.)))*smoothstep(sz,0.,r)+smoothstep(sz*.35,0.,r);col=mix(col,vec3(.95,.97,1.),clamp(arm,0.,1.)*al*uFrost*.85);}}',
 ' return col;}',
-/*  圓形換頁（D3）：uWv＝圓心 xy、半徑 z、邊緣柔和寬度 w（0＝沒有在換頁）。舊畫面的玻璃 uOp 是負的，只畫在圓外；新的只畫在圓內 */
-'float wv(int i,vec2 p){float o=uOp[i];if(uWv.w>0.){float s=smoothstep(-uWv.w,uWv.w,length(p-uWv.xy)-uWv.z);o=o<0.?-o*s:o*(1.-s);}return abs(o);}',
+/*  兩圈換頁（D3）：uWv＝圓心 xy、外圈 Ro（z，負數＝沒有在換頁）、內圈 Rn（w）。舊頁的玻璃 uOp 是負的，只畫在 Ro 外；新頁的只畫在 Rn 內；中間的空帶只有天空。邊緣 ±18px */
+'float wv(int i,vec2 p){float o=uOp[i];if(uWv.z>=0.){float dd=length(p-uWv.xy);if(o<0.)o=-o*smoothstep(uWv.z-18.,uWv.z+18.,dd);else o=uWv.w<=0.?0.:o*(1.-smoothstep(uWv.w-18.,uWv.w+18.,dd));}return abs(o);}',
 'vec3 world(vec2 p,float lod0,out float gm,out float tk){',
 ' int top=-1;float tsd=1e9;float shd=0.;float tOp=1.;gm=0.;tk=0.;',
 ' for(int i=0;i<24;i++){if(i>=uN)break;vec4 c=uC[i];if(p.x<c.x||p.y<c.y||p.x>c.z||p.y>c.w)continue;float vo=wv(i,p);if(vo<.01)continue;vec4 r=uR[i];',
@@ -333,8 +333,12 @@ function toLin(c){return c.map(function(v){v=Math.pow(clamp(v/255,0,.97),1.9);re
 function tintOf(el){if(el.matches('.opt.ai'))return toLin([52,138,190]);if(!el.matches('.pb'))return [0,0,0];var v=getComputedStyle(el).getPropertyValue('--c').trim()||getComputedStyle(el).getPropertyValue('--line').trim(),m;
   if(/^#[0-9a-f]{6}/i.test(v))m=hex(v);else if((m=v.match(/\d+(\.\d+)?/g)))m=m.slice(0,3).map(Number);else return [0,0,0];return toLin(m)}
 var RB=new Float32Array(NMAX*4),CB=new Float32Array(NMAX*4),RD=new Float32Array(NMAX),nR=0;
+/* 換頁中：舊面板整塊已在外圈內、新面板整塊還在內圈外，就不用畫，省下面板上限（NMAX） */
+function wvSkip(el,r){var old=!!el.closest('.xold'),cx=Math.max(r.left,Math.min(WV.x,r.right)),cy=Math.max(r.top,Math.min(WV.y,r.bottom)),near=Math.hypot(cx-WV.x,cy-WV.y),
+    far=Math.max(Math.hypot(r.left-WV.x,r.top-WV.y),Math.hypot(r.right-WV.x,r.top-WV.y),Math.hypot(r.left-WV.x,r.bottom-WV.y),Math.hypot(r.right-WV.x,r.bottom-WV.y));
+  return old?far<WV.ro-18:(WV.rn<=0||near>WV.rn+18)}
 function collect(){var els=document.querySelectorAll(GSEL),n=0,s='',fadeMode=document.body.classList.contains('intro')||document.body.classList.contains('lock')||document.body.classList.contains('xfade');
-  for(var k=0;k<els.length&&n<NMAX;k++){var el=els[k];if(el.matches(SOLID))continue;var r=el.getBoundingClientRect(),isD=el.classList&&el.classList.contains('dial');if(isD){var ins=r.width*.03;r={left:r.left+ins,top:r.top+ins,width:r.width-2*ins,height:r.height-2*ins,right:r.right-ins,bottom:r.bottom-ins}}if(r.width<4||r.height<4||r.bottom<0||r.top>H||r.right<0||r.left>W)continue;
+  for(var k=0;k<els.length&&n<NMAX;k++){var el=els[k];if(el.matches(SOLID))continue;var r=el.getBoundingClientRect();if(WV.on&&wvSkip(el,r))continue;var isD=el.classList&&el.classList.contains('dial');if(isD){var ins=r.width*.03;r={left:r.left+ins,top:r.top+ins,width:r.width-2*ins,height:r.height-2*ins,right:r.right-ins,bottom:r.bottom-ins}}if(r.width<4||r.height<4||r.bottom<0||r.top>H||r.right<0||r.left>W)continue;
     var cl=clipC.get(el);if(cl===undefined){cl=clipOf(el);clipC.set(el,cl)}var c=cl?cl.getBoundingClientRect():{left:-1e4,top:-1e4,right:1e4,bottom:1e4};
     if(r.right<c.left||r.left>c.right||r.bottom<c.top||r.top>c.bottom)continue;
     var rad=radC.get(el);if(rad===undefined){rad=el instanceof SVGElement||isD?1e4:parseFloat(getComputedStyle(el).borderTopLeftRadius)||0;radC.set(el,rad)}rad=Math.min(rad,r.width/2,r.height/2);
@@ -363,7 +367,7 @@ function setU(P,t){var u=P.u,a=A;gl.useProgram(P.p);
   gl.uniform3fv(u.uSun,dir(a.sunAz,a.sunAlt));gl.uniform3fv(u.uMoon,dir(a.moonAz,a.moonAlt));gl.uniform2f(u.uSunP,sx(a.sunAz),sy(a.sunAlt));gl.uniform2f(u.uMoonP,sx(a.moonAz),sy(a.moonAlt));
   gl.uniform1f(u.uCov,a.cov);gl.uniform1f(u.uRain,a.rainD);gl.uniform1f(u.uSnow,a.snow);gl.uniform1f(u.uFog,a.fog);gl.uniform1f(u.uNight,a.night);gl.uniform1f(u.uWind,a.wind);
   gl.uniform1f(u.uTilt,a.tiltW+(calm?0:(S.tiltS||0)*.45));gl.uniform1f(u.uLum,a.lum);gl.uniform1f(u.uMoonPh,S.r.moonPhase);gl.uniform1f(u.uMoonV,a.moonV);gl.uniform1f(u.uSunV,a.sunV);
-  gl.uniform1f(u.uWet,a.wet);gl.uniform1f(u.uMist,a.mist);gl.uniform1f(u.uFrost,a.frost);gl.uniform3f(u.uDL,a.dl0,a.dl1,a.dl2);gl.uniform1f(u.uSR,SR);gl.uniform1f(u.uDay,a.day);gl.uniform1f(u.uScape,S.scape||0);gl.uniform1f(u.uFlash,FL.v);gl.uniform1f(u.uGy,calm?0:S.tiltS||0);var now=performance.now();gl.uniform1f(u.uSwp,SWP?Math.min(1,(now-SWP)/900):1);gl.uniform4f(u.uDrop,DRP.x,DRP.y,DRP.t?(now-DRP.t)/1000:9,1);gl.uniform4f(u.uWv,WV.x,WV.y,WV.r,WV.on?18:0);
+  gl.uniform1f(u.uWet,a.wet);gl.uniform1f(u.uMist,a.mist);gl.uniform1f(u.uFrost,a.frost);gl.uniform3f(u.uDL,a.dl0,a.dl1,a.dl2);gl.uniform1f(u.uSR,SR);gl.uniform1f(u.uDay,a.day);gl.uniform1f(u.uScape,S.scape||0);gl.uniform1f(u.uFlash,FL.v);gl.uniform1f(u.uGy,calm?0:S.tiltS||0);var now=performance.now();gl.uniform1f(u.uSwp,SWP?Math.min(1,(now-SWP)/900):1);gl.uniform4f(u.uDrop,DRP.x,DRP.y,DRP.t?(now-DRP.t)/1000:9,1);gl.uniform4f(u.uWv,WV.x,WV.y,WV.on?WV.ro:-1,WV.rn);
   gl.uniform4f(u.uRip,RIP.x,RIP.y,RIP.t?(now-RIP.t)/1000:9,RIP.s)}
 function drawSky(t){
   setU(PR.occ,t);gl.uniform1f(PR.occ.u.uS,1);gl.bindFramebuffer(gl.FRAMEBUFFER,fbO);gl.viewport(0,0,1,1);gl.drawArrays(gl.TRIANGLES,0,3);
@@ -390,7 +394,7 @@ function loop(ts){if(!on)return;raf=requestAnimationFrame(loop);if(++CK%20===0)c
     if(FL.dbl&&ts>FL.dbl){FL.v=.8;FL.dbl=0}}else FL.next=0;
   if(FL.v>0){FL.v=Math.max(0,FL.v-dt/220);jump=true}
   var anim=step(dt),ch=collect()||wDirty,wetA=A.dl0+A.dl1+A.dl2>.01||A.snow>.01||A.rainD>.05||A.frost>.01;
-  var fx=(SWP&&ts-SWP<950)||(DRP.t&&ts-DRP.t<1900)||(RIP.t&&ts-RIP.t<1350)||document.body.classList.contains('intro')||(S.tiltS&&Math.abs(S.tiltS-(S.tiltP||0))>.005);S.tiltP=S.tiltS;if(fx)ch=true;
+  var fx=WV.on||(SWP&&ts-SWP<950)||(DRP.t&&ts-DRP.t<1900)||(RIP.t&&ts-RIP.t<1350)||document.body.classList.contains('intro')||(S.tiltS&&Math.abs(S.tiltS-(S.tiltP||0))>.005);S.tiltP=S.tiltS;if(fx)ch=true;
   var skyInt=anim?33:(A.rainD>.05||A.snow>.01)?66:100,compInt=(anim||wetA)?33:66;
   var ns=jump||ts-lastSky>=skyInt;if(ns){drawSky(ts/1000);lastSky=ts;jump=false}
   if(ns||ch||ts-lastComp>=compInt){drawComp(ts/1000);lastComp=ts}}
@@ -424,7 +428,8 @@ return {
     return GL_OK},
   ok:function(){return GL_OK},
   sweep:function(){if(!calm)SWP=performance.now()},
-  wave:function(x,y,r){if(x==null)WV.on=0;else{WV.x=x;WV.y=y;WV.r=r;WV.on=1}poke()},
+  /* 換頁的兩圈：每一幀由 app.js 設；轉場中 loop 每一幀都重畫，所以這裡不 poke（v51 每幀多畫一次） */
+  wave:function(x,y,ro,rn){if(x==null){WV.on=0;poke()}else{WV.x=x;WV.y=y;WV.ro=ro;WV.rn=rn;WV.on=1}},
   drop:function(x,y){if(calm)return;DRP={x:x==null?innerWidth/2:x,y:y==null?innerHeight/2:y,t:performance.now()};poke()},
   set:function(p){if(typeof SunCalc==='undefined')return;S.scape=p.scape==='sea'?1:p.scape==='city'?2:0;var k=[p.scape,p.lat,p.lng,Math.round(p.at.getTime()/60000),JSON.stringify(p.wx||{})].join('|');
     if(k===S.k)return;S.k=k;S.r=compute(p);paintBody(S.r);T=targets(S.r);if(!A)step(0);if(!on||calm)poke()},

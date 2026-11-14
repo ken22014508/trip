@@ -292,9 +292,9 @@ function skyAt(i,t0){var d=dayDate(i);return new Date(Date.UTC(d.getFullYear(),d
 function head(m){var i=m.i,D=DAYS[i],where=m.st.here?'在 '+item(i,m.st.here).name:m.kind==='move'?'往 '+m.next.it.name:m.kind==='gap'?'往 '+m.gap.it.name:m.kind==='conf'?'往 '+m.is.it.name:D.name;
   return '<header class="hd"><div><b>'+esc(where)+'</b><span>'+esc(D.name)+'　'+dlabel(i)+'</span></div>'+wxNow(i,m.now)
    +'</header>'+pvBar(m.now)}
-var lastBig='';
+var lastBig='',noRoll=false;
 function roll(str){return '<span class="sr">'+str+'</span><span class="roll num" aria-hidden="true" data-s="'+str+'">'+str.split('').map(function(ch,n){if(!/\d/.test(ch))return '<span class="cl">'+ch+'</span>';
-  var pv=/\d/.test(lastBig.charAt(n))?+lastBig.charAt(n):(+ch+9)%10;
+  var pv=noRoll?+ch:/\d/.test(lastBig.charAt(n))?+lastBig.charAt(n):(+ch+9)%10;
   return '<span class="dg"><i style="transform:translateY(-'+pv+'em)" data-to="'+ch+'">0<br>1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9</i></span>'}).join('')+'</span>'}
 function bigOf(o){return o.txt?'<b class="txt'+(o.small?' sm':'')+'">'+esc(o.big)+'</b>':roll(o.big)}
 function dial(frac,lab,big,subt){var R=112,C=2*Math.PI*R,f=Math.max(0,Math.min(1,frac)),tk='';
@@ -603,20 +603,29 @@ function dropFx(btn){var br=btn.getBoundingClientRect(),p=lastPt&&Date.now()-las
 function mkOld(){var o=app.cloneNode(true);o.classList.add('xold');o.setAttribute('aria-hidden','true');
   o.querySelectorAll('[id]').forEach(function(e){e.removeAttribute('id')});o.querySelectorAll('.burst').forEach(function(e){e.classList.remove('burst')});
   app.parentNode.insertBefore(o,app.nextSibling);o.scrollTop=app.scrollTop;document.body.classList.add('xfade');return o}
-/* 圓形換頁：舊畫面的複本挖一個跟著水波長大的圓洞（CSS mask），洞裡露出新畫面；sky.js 的玻璃用同一個圓。兩頁不會重疊 */
-function waveFx(fx,old){if(!old)return;var E=18,far=0;[[0,0],[innerWidth,0],[0,innerHeight],[innerWidth,innerHeight]].forEach(function(c){far=Math.max(far,Math.hypot(c[0]-fx.x,c[1]-fx.y))});
-  var done=false,end=function(){if(done)return;done=true;if(old.parentNode)old.remove();document.body.classList.remove('xfade');if(window.Sky&&Sky.wave)Sky.wave(null)};
-  (function step(){if(done)return;var R=(performance.now()-fx.t0)/1000*fx.v,m='radial-gradient(circle at '+fx.x.toFixed(1)+'px '+fx.y.toFixed(1)+'px, transparent '+Math.max(0,R-E).toFixed(1)+'px, #000 '+(R+E).toFixed(1)+'px)';
-    old.style.webkitMaskImage=m;old.style.maskImage=m;if(window.Sky&&Sky.wave)Sky.wave(fx.x,fx.y,R);
-    if(R-E>far)end();else requestAnimationFrame(step)})();
+/* 兩圈換頁（D3 定案）：外圈 Ro 洗掉舊頁、內圈 Rn＝(t−GAP)×波速 帶出新頁，中間一圈空帶只有天空和水波，新舊兩頁不會碰在一起。
+   舊頁複本：Ro 外看得到；新頁 #app：Rn 內看得到。sky.js 的玻璃用同樣兩圈（Sky.wave）。 */
+var WAVE_GAP=.32,WAVE_E=18;
+function waveMask(el,x,y,a,b){var m='radial-gradient(circle at '+x.toFixed(1)+'px '+y.toFixed(1)+'px, '+a+')';el.style.webkitMaskImage=m;el.style.maskImage=m}
+function waveFx(fx,old){if(!old)return;var E=WAVE_E,far=0;[[0,0],[innerWidth,0],[0,innerHeight],[innerWidth,innerHeight]].forEach(function(c){far=Math.max(far,Math.hypot(c[0]-fx.x,c[1]-fx.y))});
+  var clr=function(el){el.style.webkitMaskImage='';el.style.maskImage=''},done=false,
+    end=function(){if(done)return;done=true;clr(app);if(old.parentNode)old.remove();document.body.classList.remove('xfade');if(window.Sky&&Sky.wave)Sky.wave(null)},
+    frame=function(){var t=(performance.now()-fx.t0)/1000,Ro=t*fx.v,Rn=Math.max(0,t-WAVE_GAP)*fx.v;
+      waveMask(old,fx.x,fx.y,'transparent '+Math.max(0,Ro-E).toFixed(1)+'px, #000 '+(Ro+E).toFixed(1)+'px');
+      if(Rn<=0){app.style.webkitMaskImage=app.style.maskImage='linear-gradient(transparent,transparent)'}
+      else waveMask(app,fx.x,fx.y,'#000 '+Math.max(0,Rn-E).toFixed(1)+'px, transparent '+(Rn+E).toFixed(1)+'px');
+      if(window.Sky&&Sky.wave)Sky.wave(fx.x,fx.y,Ro,Rn);return Rn-E>far};
+  frame(); /* 跟換 innerHTML 同一段：新頁一開始就全遮，不會先閃一下 */
+  (function step(){if(done)return;if(frame())end();else requestAnimationFrame(step)})();
   setTimeout(end,4000)}
 function render(){
   document.body.dataset.tab=G?'guest':tab;skyRender();
   if(G){tabsEl.hidden=true;app.innerHTML=vGuest();drawSheet();return}
   tabsEl.hidden=false;
   TABS.forEach(function(t,n){var b=tabsEl.children[n+1],on=tab===t[0];b.className=on?'on':'';if(on){b.setAttribute('aria-current','page');tabsEl.style.setProperty('--ti',n)}else b.removeAttribute('aria-current')});
-  var oldEl=arrFx?mkOld():null;
+  var oldEl=arrFx?mkOld():null;noRoll=!!arrFx;
   app.innerHTML=tab==='now'?vNow():tab==='plan'?vPlan():vMore();
+  noRoll=false;
   if(tab!==lastTab){app.scrollTop=0;lastTab=tab}
   if(arrFx){var fx0=arrFx;arrFx=null;waveFx(fx0,oldEl)} /* 頁面本身不捲，捲的是 #app；換分頁時回到最上面 */
   var a=document.getElementById('arc'),hd=document.getElementById('hdot'),rl=document.querySelector('.roll');
