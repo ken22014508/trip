@@ -692,3 +692,6 @@ body.th-glass .desk .kv{margin-top:10px;padding:16px 18px}
 #rtin{width:100%;box-sizing:border-box;font-size:15px;margin-top:8px;min-height:110px}
 .ans{font-size:16px;line-height:1.6;margin:8px 0 10px}
 #askrepo,#asktok{width:100%;box-sizing:border-box;margin:4px 0 10px}
+#diag .dg-fx{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 10px}#diag .dg-fx span{width:100%;color:#aaa}#diag .dg-fx button{width:auto;flex:1;height:36px;background:#333;color:#fff}#diag .dg-fx button.on{background:#fff;color:#000}
+.bc{display:inline-block}
+.roll > .cl{display:inline-block}
