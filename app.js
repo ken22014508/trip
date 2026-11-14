@@ -508,7 +508,7 @@ function diag(){var old=document.getElementById('diag');if(old){old.remove();ret
     ['100vh / svh / lvh / dvh',probe('height:100vh').h+' / '+probe('height:100svh').h+' / '+probe('height:100lvh').h+' / '+probe('height:100dvh').h],
     ['天空畫布',Math.round(fr.top)+' → '+Math.round(fr.bottom)],['導覽列底',Math.round(tb.bottom)],['--fullh',getComputedStyle(document.documentElement).getPropertyValue('--fullh')],['html 底色',document.documentElement.style.backgroundColor||'(預設)'],['body',document.body.className]];
   var d=document.createElement('div');d.id='diag';
-  d.innerHTML='<div class="dg-line"></div><div class="dg-scr" style="height:'+screen.height+'px"></div><div class="dg-box"><b>檢查畫面</b><table>'+rows.map(function(r){return '<tr><th>'+esc(r[0])+'</th><td>'+esc(String(r[1]))+'</td></tr>'}).join('')+'</table><p>紅線＝網頁框的底　黃框＝整個螢幕的高度</p><div class="dg-fx"><span>到了／走了的轉場</span>'+[['cut','只有兩圈'],['bob','甲：字被抬起']].map(function(o){return '<button data-fxm="'+o[0]+'" class="'+(fxMode()===o[0]?'on':'')+'">'+o[1]+'</button>'}).join('')+'</div><button data-diag="1">關閉</button></div>';
+  d.innerHTML='<div class="dg-line"></div><div class="dg-scr" style="height:'+screen.height+'px"></div><div class="dg-box"><b>檢查畫面</b><table>'+rows.map(function(r){return '<tr><th>'+esc(r[0])+'</th><td>'+esc(String(r[1]))+'</td></tr>'}).join('')+'</table><p>紅線＝網頁框的底　黃框＝整個螢幕的高度</p><div class="dg-fx"><span>到了／走了的轉場</span>'+[['cut','只有兩圈'],['bob','甲：字被抬起'],['gl','乙：轉盤的字被折射']].map(function(o){return '<button data-fxm="'+o[0]+'" class="'+(fxMode()===o[0]?'on':'')+'">'+o[1]+'</button>'}).join('')+'</div><button data-diag="1">關閉</button></div>';
   document.body.appendChild(d)}
 /* ---------- 底部面板 ---------- */
 var chg=null,tiltMsg=''; /* 「計畫有變」裡正在看的結果 */
@@ -606,25 +606,45 @@ function mkOld(){var o=app.cloneNode(true);o.classList.add('xold');o.setAttribut
 /* 兩圈換頁（D3 定案）：外圈 Ro 洗掉舊頁、內圈 Rn＝(t−GAP)×波速 帶出新頁，中間一圈空帶只有天空和水波，新舊兩頁不會碰在一起。
    舊頁複本：Ro 外看得到；新頁 #app：Rn 內看得到。sky.js 的玻璃用同樣兩圈（Sky.wave）。 */
 var WAVE_GAP=.32,WAVE_E=18,BOB_W=60,BOB_A=6,BOB_B=.04;
-/* 轉場效果（「更多 → 點版號」的檢查畫面切換）：cut＝只有兩圈；bob＝甲案，字被波抬起來（預設）；gl＝乙案，轉盤的字畫進 WebGL */
+/* 轉場效果（「更多 → 點版號」的檢查畫面切換）：cut＝只有兩圈；bob＝甲案，字被波抬起來（預設）；gl＝乙案，轉盤的字畫進 WebGL、其他照甲案 */
 function fxMode(){return S.fx||'bob'}
 /* 甲案：找出一層裡要動的單位（區塊；轉盤只動 .lab、.rem 和大字的每一個字），量好中心存起來 */
-function bobUnits(root){var U=[],add=function(e){var r=e.getBoundingClientRect();if(r.width&&r.height)U.push({e:e,x:r.left+r.width/2,y:r.top+r.height/2})};
+function bobUnits(root,noDialText){var U=[],add=function(e){var r=e.getBoundingClientRect();if(r.width&&r.height)U.push({e:e,x:r.left+r.width/2,y:r.top+r.height/2})};
   root.querySelectorAll('.stage > :not(.hd), .hd > *').forEach(function(e){
     if(!e.classList.contains('dial')){add(e);return}
-    e.querySelectorAll('.lab,.rem').forEach(add);var bg=e.querySelector('.big');if(!bg)return;
+    if(noDialText)return;e.querySelectorAll('.lab,.rem').forEach(add);var bg=e.querySelector('.big');if(!bg)return;
     var rl=bg.querySelector('.roll');if(rl){[].forEach.call(rl.children,add);return}
     var t=bg.querySelector('.txt')||bg;if(!t.dataset.orig){t.dataset.orig=t.innerHTML;t.innerHTML=Array.from(t.textContent).map(function(c){return /\s/.test(c)?c:'<span class="bc">'+esc(c)+'</span>'}).join('')}
     t.querySelectorAll('.bc').forEach(add)});
   return U}
 function bobFrame(U,x,y,R){U.forEach(function(u){var dx=u.x-x,dy=u.y-y,dist=Math.hypot(dx,dy)||1,d=dist-R,l=Math.exp(-(d/BOB_W)*(d/BOB_W));
   u.e.style.transform=l<.01?'':'translate('+(dx/dist*BOB_A*l).toFixed(2)+'px,'+(dy/dist*BOB_A*l).toFixed(2)+'px) scale('+(1+BOB_B*l).toFixed(4)+')'})}
+/* 乙案：把一層轉盤的三段字（.lab .big .rem）照 DOM 的位置一個字一個字畫到 canvas；字型、顏色、陰影從 getComputedStyle 拿 */
+var GLSEL='.dial .lab,.dial .big,.dial .rem';
+function textCanvas(root,R){var dpr=window.devicePixelRatio||1,c=document.createElement('canvas');c.width=Math.ceil(R.w*dpr);c.height=Math.ceil(R.h*dpr);var g=c.getContext('2d');g.scale(dpr,dpr);
+  var put=function(ch,rc,el){var st=getComputedStyle(el);g.font=st.fontStyle+' '+st.fontWeight+' '+st.fontSize+' '+st.fontFamily;g.fillStyle=st.color;
+    var sh=/(rgba?\([^)]*\)|#[0-9a-f]+)\s+(-?[\d.]+)px\s+(-?[\d.]+)px\s+([\d.]+)px/i.exec(st.textShadow||'');
+    if(sh){g.shadowColor=sh[1];g.shadowOffsetX=+sh[2]*dpr;g.shadowOffsetY=+sh[3]*dpr;g.shadowBlur=+sh[4]*dpr}else g.shadowColor='transparent';
+    var m=g.measureText(ch),a=m.fontBoundingBoxAscent!=null?m.fontBoundingBoxAscent:m.actualBoundingBoxAscent,d=m.fontBoundingBoxDescent!=null?m.fontBoundingBoxDescent:m.actualBoundingBoxDescent;
+    g.fillText(ch,rc.left-R.x+(rc.width-m.width)/2,rc.top-R.y+(rc.height-(a+d))/2+a)};
+  root.querySelectorAll(GLSEL).forEach(function(el){
+    el.querySelectorAll('.dg').forEach(function(dg){var i=dg.querySelector('i');if(i)put(i.dataset.to,dg.getBoundingClientRect(),i)});
+    var w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT,null),t;
+    while(t=w.nextNode()){if(t.parentNode.closest('.dg,.sr'))continue;for(var k=0;k<t.nodeValue.length;k++){var ch=t.nodeValue[k];if(!ch.trim())continue;
+      var rg=document.createRange();rg.setStart(t,k);rg.setEnd(t,k+1);var rc=rg.getClientRects()[0];if(rc&&rc.width>1)put(ch,rc,t.parentNode)}}});
+  return c}
+/* 開始乙案：兩層都有轉盤才做；做不起來回 null（退回甲案） */
+function glDial(old,neu){var dO=old.querySelector('.dial'),dN=neu.querySelector('.dial');if(!dO||!dN||!window.Sky||!Sky.text)return null;
+  var a=dO.getBoundingClientRect(),b=dN.getBoundingClientRect(),P=24,x=Math.min(a.left,b.left)-P,y=Math.min(a.top,b.top)-P,R={x:x,y:y,w:Math.max(a.right,b.right)+P-x,h:Math.max(a.bottom,b.bottom)+P-y};
+  if(!Sky.text(textCanvas(old,R),textCanvas(neu,R),R))return null;
+  var hid=[].slice.call(old.querySelectorAll(GLSEL)).concat([].slice.call(neu.querySelectorAll(GLSEL)));hid.forEach(function(e){e.style.visibility='hidden'});
+  return {done:function(){hid.forEach(function(e){e.style.visibility=''});Sky.text(null)}}}
 function bobClear(U){U.forEach(function(u){u.e.style.transform=''});app.querySelectorAll('[data-orig]').forEach(function(t){t.innerHTML=t.dataset.orig;t.removeAttribute('data-orig')})}
 function waveMask(el,x,y,a,b){var m='radial-gradient(circle at '+x.toFixed(1)+'px '+y.toFixed(1)+'px, '+a+')';el.style.webkitMaskImage=m;el.style.maskImage=m}
 function waveFx(fx,old){if(!old)return;var E=WAVE_E,far=0;[[0,0],[innerWidth,0],[0,innerHeight],[innerWidth,innerHeight]].forEach(function(c){far=Math.max(far,Math.hypot(c[0]-fx.x,c[1]-fx.y))});
   var clr=function(el){el.style.webkitMaskImage='';el.style.maskImage=''},done=false,
-    bob=fxMode()!=='cut',UO=bob?bobUnits(old):[],UN=bob?bobUnits(app):[],
-    end=function(){if(done)return;done=true;clr(app);bobClear(UN);if(old.parentNode)old.remove();document.body.classList.remove('xfade');if(window.Sky&&Sky.wave)Sky.wave(null)},
+    gd=fxMode()==='gl'?glDial(old,app):null,bob=fxMode()!=='cut',UO=bob?bobUnits(old,!!gd):[],UN=bob?bobUnits(app,!!gd):[],
+    end=function(){if(done)return;done=true;clr(app);bobClear(UN);if(gd)gd.done();if(old.parentNode)old.remove();document.body.classList.remove('xfade');if(window.Sky&&Sky.wave)Sky.wave(null)},
     frame=function(){var t=(performance.now()-fx.t0)/1000,Ro=t*fx.v,Rn=Math.max(0,t-WAVE_GAP)*fx.v;
       waveMask(old,fx.x,fx.y,'transparent '+Math.max(0,Ro-E).toFixed(1)+'px, #000 '+(Ro+E).toFixed(1)+'px');
       if(Rn<=0){app.style.webkitMaskImage=app.style.maskImage='linear-gradient(transparent,transparent)'}

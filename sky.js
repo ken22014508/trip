@@ -39,7 +39,7 @@ function compute(p){var r={};
    3. 合成（手機原生解析度）：玻璃面板、液態玻璃按鈕、窗上的水滴和霜、星星、雨絲雪花。
       霧面＝讀貼圖的模糊層；液態玻璃＝讀清楚的層再折射。所以按鈕邊緣是清楚的，天空每個像素只算一次。
    天氣、時間都是緩動過去的（下雨慢慢下起來，雨停水滴留在窗上慢慢乾）。 */
-var SWP=0,DRP={x:0,y:0,t:0},WV={x:0,y:0,ro:0,rn:0,on:0},RIP={x:0,y:0,t:0,s:1},OPB=new Float32Array(24),FL={v:0,next:0},gl=null,GL_OK=false,PR={},RS=1,SR=.8,Q=0,sig='',clipC=new WeakMap(),radC=new WeakMap(),slow=0,lastT=0,lastSky=0,lastComp=0,A=null,T=null,jump=true;
+var SWP=0,TX={o:null,n:null,r:[0,0,1,1],on:0},DRP={x:0,y:0,t:0},WV={x:0,y:0,ro:0,rn:0,on:0},RIP={x:0,y:0,t:0,s:1},OPB=new Float32Array(24),FL={v:0,next:0},gl=null,GL_OK=false,PR={},RS=1,SR=.8,Q=0,sig='',clipC=new WeakMap(),radC=new WeakMap(),slow=0,lastT=0,lastSky=0,lastComp=0,A=null,T=null,jump=true;
 var fbD,txD,DW=0,DH=0,fbS,txS,SW=0,SH=0,fbO,txO,wpc,wpx,wtex,wDirty=false,wAny=false,wLast=0,wN=0,wPrev=null,wDown=null,wMoved=false;
 var LQ='.opt:not(.ghost),.pb,.tile,.gb,.gb2,.chip,.ib,.pvw,.wxb,.bind,.mini,.days button,.askbar,.opt.ghost,.stepper,.tel';
 var GSEL='.dial,.opt:not(.ghost),.pb,.panel,.menu,.tile,.tonight,.strip,.askbar,.bind,.days button,.pv,.pvw,.wxb,.gb,.gb2,.opt.ghost,.chip,.ib,.mrow input,input[type=text],input[type=number],input[type=time],textarea,.stepper,.tel,.mini';
@@ -158,7 +158,7 @@ var DROP_FS=HEAD+['','uniform vec3 uDL;uniform sampler2D uWp;',
 ' o=vec4(clamp(vec2(cx-c.x,-(cy-c.x))*2.+.5,0.,1.),c.x,c.y);}'].join('\n');
 var COMP_FS=HEAD+['',
 'uniform int uN;uniform vec4 uR[24];uniform vec4 uC[24];uniform float uRad[24];uniform vec4 uK[24];uniform float uWet,uMist,uFrost,uSR,uDay,uGy,uSwp;uniform vec4 uDrop;uniform vec4 uWv;uniform float uOp[24];uniform vec4 uRip;uniform vec3 uDL;',
-'uniform sampler2D uSky,uOcc,uWp,uDr;',
+'uniform sampler2D uSky,uOcc,uWp,uDr,uTo,uTn;uniform vec4 uTx;uniform float uTon;',
 'vec3 dec(vec3 v){v=min(pow(v,vec3(1.9)),vec3(.995));return -log(1.-v)/1.1;}',
 'vec2 tuv(vec2 p){return vec2(p.x/uV.x,1.-p.y/uV.y);}',
 'vec3 skyAt(vec2 p,float lod){p.x+=uGy*14.;return dec(textureLod(uSky,tuv(p),lod).rgb);}',
@@ -290,8 +290,12 @@ var COMP_FS=HEAD+['',
 ' col=col*(1.-max(-drw,0.)*.16)+vec3(1.,.99,.96)*(max(drw,0.)*.3+drf*.55);',
 ' col=col*(1.-max(-gRip,0.)*.22)+vec3(1.)*max(gRip,0.)*.28;',
 ' col+=vec3(.75,.82,.9)*rn*uRain*inG+vec3(1.)*sn*uSnow*inG*.85;',
+/* 乙案：轉盤的字（舊、新兩張貼圖，預乘透明度）。取樣座標用折射後的 q，跟玻璃一起被水波和窗上的水折彎；舊字只在外圈外、新字只在內圈內 */
+' if(uTon>.5){vec2 tc=(q-uTx.xy)/uTx.zw;if(tc.x>0.&&tc.y>0.&&tc.x<1.&&tc.y<1.){float dd=length(p-uWv.xy);',
+'  vec4 to=texture(uTo,tc)*smoothstep(uWv.z-18.,uWv.z+18.,dd);vec4 tn=uWv.w<=0.?vec4(0.):texture(uTn,tc)*(1.-smoothstep(uWv.w-18.,uWv.w+18.,dd));',
+'  col=col*(1.-to.a)+to.rgb;col=col*(1.-tn.a)+tn.rgb;}}',
 ' float dt=h21(gl_FragCoord.xy+fract(uT))/255.;o=vec4(col+dt,1.);}'].join('\n');
-var UN='uGy uSwp uDrop uWv uOp uRip uScape uFlash uDay uDr uV uS uT uCov uRain uSnow uFog uNight uWind uTilt uLum uMoonPh uMoonV uSunV uSun uMoon uSunP uMoonP uN uR uC uRad uK uWet uMist uFrost uSR uDL uSky uOcc uWp'.split(' ');
+var UN='uGy uSwp uDrop uWv uTo uTn uTx uTon uOp uRip uScape uFlash uDay uDr uV uS uT uCov uRain uSnow uFog uNight uWind uTilt uLum uMoonPh uMoonV uSunV uSun uMoon uSunP uMoonP uN uR uC uRad uK uWet uMist uFrost uSR uDL uSky uOcc uWp'.split(' ');
 function mkProg(fs){function sh(t,src){var x=gl.createShader(t);gl.shaderSource(x,src);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS)){console.warn(gl.getShaderInfoLog(x));return null}return x}
   var v=sh(gl.VERTEX_SHADER,VS),f=sh(gl.FRAGMENT_SHADER,fs);if(!v||!f)return null;var p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.bindAttribLocation(p,0,'a');gl.linkProgram(p);
   if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.warn(gl.getProgramInfoLog(p));return null}var u={};UN.forEach(function(k){u[k]=gl.getUniformLocation(p,k)});return {p:p,u:u}}
@@ -381,7 +385,7 @@ function drawComp(t){drawDrops(t);var P=PR.comp,u=P.u;setU(P,t);gl.uniform1f(u.u
   gl.activeTexture(gl.TEXTURE3);gl.bindTexture(gl.TEXTURE_2D,txD);gl.uniform1i(u.uDr,3);
   gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,txS);gl.uniform1i(u.uSky,0);
   gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,txO);gl.uniform1i(u.uOcc,1);
-  gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,wtex);if(wDirty){gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,wpc);wDirty=false}gl.uniform1i(u.uWp,2);
+  gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,wtex);if(wDirty){gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,wpc);wDirty=false}gl.uniform1i(u.uWp,2);gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,TX.o||wtex);gl.uniform1i(u.uTo,4);gl.activeTexture(gl.TEXTURE5);gl.bindTexture(gl.TEXTURE_2D,TX.n||wtex);gl.uniform1i(u.uTn,5);gl.uniform4f(u.uTx,TX.r[0],TX.r[1],TX.r[2],TX.r[3]);gl.uniform1f(u.uTon,TX.on&&TX.o&&TX.n?1:0);gl.activeTexture(gl.TEXTURE0);
   gl.uniform1i(u.uN,nR);if(nR){gl.uniform1fv(u.uOp,OPB);gl.uniform4fv(u.uR,RB);gl.uniform4fv(u.uC,CB);gl.uniform1fv(u.uRad,RD);gl.uniform4fv(u.uK,KB)}
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,cv.width,cv.height);gl.drawArrays(gl.TRIANGLES,0,3)}
 /* 省電分級：天氣在變、拖動、下雨下雪時全速；晴天靜止時天空每秒 10 張、合成看有沒有東西在動 */
@@ -428,6 +432,12 @@ return {
     return GL_OK},
   ok:function(){return GL_OK},
   sweep:function(){if(!calm)SWP=performance.now()},
+  /* 乙案：把舊、新兩張字的 canvas 當貼圖（r＝{x,y,w,h}，畫面座標）；text(null) 收掉。WebGL 不能用回 false，app 退回甲案 */
+  text:function(a,b,r){if(a==null){TX.on=0;return true}if(!gl||!GL_OK)return false;try{
+      var up=function(t,c){if(!t){t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE)}else gl.bindTexture(gl.TEXTURE_2D,t);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,c);gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);return t};
+      gl.activeTexture(gl.TEXTURE4);TX.o=up(TX.o,a);TX.n=up(TX.n,b);gl.activeTexture(gl.TEXTURE0);TX.r=[r.x,r.y,r.w,r.h];TX.on=1;return !gl.getError()}catch(e){TX.on=0;return false}},
   /* 換頁的兩圈：每一幀由 app.js 設；轉場中 loop 每一幀都重畫，所以這裡不 poke（v51 每幀多畫一次） */
   wave:function(x,y,ro,rn){if(x==null){WV.on=0;poke()}else{WV.x=x;WV.y=y;WV.ro=ro;WV.rn=rn;WV.on=1}},
   drop:function(x,y){if(calm)return;DRP={x:x==null?innerWidth/2:x,y:y==null?innerHeight/2:y,t:performance.now()};poke()},
