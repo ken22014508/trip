@@ -389,8 +389,8 @@ function drawComp(t){drawDrops(t);var P=PR.comp,u=P.u;setU(P,t);gl.uniform1f(u.u
   gl.uniform1i(u.uN,nR);if(nR){gl.uniform1fv(u.uOp,OPB);gl.uniform4fv(u.uR,RB);gl.uniform4fv(u.uC,CB);gl.uniform1fv(u.uRad,RD);gl.uniform4fv(u.uK,KB)}
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,cv.width,cv.height);gl.drawArrays(gl.TRIANGLES,0,3)}
 /* 省電分級：天氣在變、拖動、下雨下雪時全速；晴天靜止時天空每秒 10 張、合成看有沒有東西在動 */
-var LW=0,LH=0,CK=0;
-function loop(ts){if(!on)return;raf=requestAnimationFrame(loop);if(++CK%20===0)chk();if(wpx)wipeDecay(ts);
+var LW=0,LH=0,CK=0,PRE=null;
+function loop(ts){if(!on)return;raf=requestAnimationFrame(loop);if(PRE)PRE(ts);if(++CK%20===0)chk();if(wpx)wipeDecay(ts);
   var dt=lastT?Math.min(ts-lastT,100):16;
   if(lastT){slow=slow*.95+(dt>45?1:0)*.05;if(slow>.6&&Q<QL.length-1){Q++;slow=0;size()}}lastT=ts;
   /* 打雷：隨機 8～25 秒一次閃光（減少動態時不閃） */
@@ -438,6 +438,12 @@ return {
         gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE)}else gl.bindTexture(gl.TEXTURE_2D,t);
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,c);gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);return t};
       gl.activeTexture(gl.TEXTURE4);TX.o=up(TX.o,a);TX.n=up(TX.n,b);gl.activeTexture(gl.TEXTURE0);TX.r=[r.x,r.y,r.w,r.h];TX.on=1;return !gl.getError()}catch(e){TX.on=0;return false}},
+  /* 換頁時 app.js 每一幀要做的事，交給 loop 在畫之前叫：遮罩、字的位置和 GL 同一幀更新（各自 rAF 時 GL 可能慢一幀）。回 true＝loop 會叫 */
+  pre:function(f){PRE=f;return !!(f&&on&&!calm&&GL_OK)},
+  /* 馬上畫一張（換頁第一幀，DOM 的字剛藏起來，GL 的字要同一刻補上） */
+  draw:function(){if(on)poke()},
+  /* 預熱乙案：開 app 後先用一張字的貼圖畫一次（畫在畫面外），第一次換頁不會因為建貼圖、上傳慢一兩格 */
+  warm:function(c){if(!this.text(c,c,{x:-1e5,y:-1e5,w:c.width||1,h:c.height||1}))return false;poke();TX.on=0;return true},
   /* 換頁的兩圈：每一幀由 app.js 設；轉場中 loop 每一幀都重畫，所以這裡不 poke（v51 每幀多畫一次） */
   wave:function(x,y,ro,rn){if(x==null){WV.on=0;poke()}else{WV.x=x;WV.y=y;WV.ro=ro;WV.rn=rn;WV.on=1}},
   drop:function(x,y){if(calm)return;DRP={x:x==null?innerWidth/2:x,y:y==null?innerHeight/2:y,t:performance.now()};poke()},

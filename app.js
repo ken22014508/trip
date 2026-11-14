@@ -590,6 +590,9 @@ function sky(t0){var h=t0/60,a=SKY[0],b=SKY[1];for(var n=0;n<SKY.length-1;n++)if
 /* 外觀：結構不變，換的是一整包（材質、背景、動態） */
 var THEMES=[['glass','天空玻璃','天空跟著當地時間和天氣變，面板是玻璃'],['plain','簡潔','不畫天空和動態，比較省電']];
 if(window.Sky)Sky.init(document.getElementById('fx'),document.getElementById('drops'));
+/* 預熱乙案：開 app 1.5 秒後把轉盤的字畫一次到畫面外，第一次「到了／走了」就不會慢一兩格 */
+setTimeout(function(){try{if(!window.Sky||!Sky.warm||fxMode()!=='gl')return;var d=app.querySelector('.dial');if(!d)return;var b=d.getBoundingClientRect();
+  Sky.warm(textCanvas(app,{x:b.left-24,y:b.top-24,w:b.width+48,h:b.height+48}))}catch(e){}},1500);
 function skyRender(){var glass=S.theme==='glass'&&!!window.Sky;document.body.classList.toggle('th-glass',glass);var t0=nowMin(cur);
   if(glass){var D=DAYS[cur];Sky.set({scape:D.scape,lat:D.ll[0],lng:D.ll[1],at:skyAt(cur,t0),wx:skyWx(cur,t0)});Sky.on(true);Sky.poke()}
   else{if(window.Sky)Sky.on(false);sky(t0)}}
@@ -606,8 +609,8 @@ function mkOld(){var o=app.cloneNode(true);o.classList.add('xold');o.setAttribut
 /* 兩圈換頁（D3 定案）：外圈 Ro 洗掉舊頁、內圈 Rn＝(t−GAP)×波速 帶出新頁，中間一圈空帶只有天空和水波，新舊兩頁不會碰在一起。
    舊頁複本：Ro 外看得到；新頁 #app：Rn 內看得到。sky.js 的玻璃用同樣兩圈（Sky.wave）。 */
 var WAVE_GAP=.32,WAVE_E=18,BOB_W=60,BOB_A=6,BOB_B=.04;
-/* 轉場效果（「更多 → 點版號」的檢查畫面切換）：cut＝只有兩圈；bob＝甲案，字被波抬起來（預設）；gl＝乙案，轉盤的字畫進 WebGL、其他照甲案 */
-function fxMode(){return S.fx||'bob'}
+/* 轉場效果（「更多 → 點版號」的檢查畫面切換）：cut＝只有兩圈；bob＝甲案，字被波抬起來；gl＝乙案（預設），轉盤的字畫進 WebGL、其他照甲案 */
+function fxMode(){return S.fx||'gl'}
 /* 甲案：找出一層裡要動的單位（區塊；轉盤只動 .lab、.rem 和大字的每一個字），量好中心存起來 */
 function bobUnits(root,noDialText){var U=[],add=function(e){var r=e.getBoundingClientRect();if(r.width&&r.height)U.push({e:e,x:r.left+r.width/2,y:r.top+r.height/2})};
   root.querySelectorAll('.stage > :not(.hd), .hd > *').forEach(function(e){
@@ -644,7 +647,7 @@ function waveMask(el,x,y,a,b){var m='radial-gradient(circle at '+x.toFixed(1)+'p
 function waveFx(fx,old){if(!old)return;var E=WAVE_E,far=0;[[0,0],[innerWidth,0],[0,innerHeight],[innerWidth,innerHeight]].forEach(function(c){far=Math.max(far,Math.hypot(c[0]-fx.x,c[1]-fx.y))});
   var clr=function(el){el.style.webkitMaskImage='';el.style.maskImage=''},done=false,
     gd=fxMode()==='gl'?glDial(old,app):null,bob=fxMode()!=='cut',UO=bob?bobUnits(old,!!gd):[],UN=bob?bobUnits(app,!!gd):[],
-    end=function(){if(done)return;done=true;clr(app);bobClear(UN);if(gd)gd.done();if(old.parentNode)old.remove();document.body.classList.remove('xfade');if(window.Sky&&Sky.wave)Sky.wave(null)},
+    end=function(){if(done)return;done=true;if(window.Sky&&Sky.pre)Sky.pre(null);clr(app);bobClear(UN);if(gd)gd.done();if(old.parentNode)old.remove();document.body.classList.remove('xfade');if(window.Sky&&Sky.wave)Sky.wave(null)},
     frame=function(){var t=(performance.now()-fx.t0)/1000,Ro=t*fx.v,Rn=Math.max(0,t-WAVE_GAP)*fx.v;
       waveMask(old,fx.x,fx.y,'transparent '+Math.max(0,Ro-E).toFixed(1)+'px, #000 '+(Ro+E).toFixed(1)+'px');
       if(Rn<=0){app.style.webkitMaskImage=app.style.maskImage='linear-gradient(transparent,transparent)'}
@@ -652,7 +655,10 @@ function waveFx(fx,old){if(!old)return;var E=WAVE_E,far=0;[[0,0],[innerWidth,0],
       if(bob){bobFrame(UO,fx.x,fx.y,Ro);bobFrame(UN,fx.x,fx.y,Rn)}
       if(window.Sky&&Sky.wave)Sky.wave(fx.x,fx.y,Ro,Rn);return Rn-E>far};
   frame(); /* 跟換 innerHTML 同一段：新頁一開始就全遮，不會先閃一下 */
-  (function step(){if(done)return;if(frame())end();else requestAnimationFrame(step)})();
+  if(gd&&Sky.draw)Sky.draw(); /* 轉盤的字剛從 DOM 藏起來，GL 這一刻就畫上 */
+  /* 有天空在跑：每一幀交給 sky.js 的 loop 在畫之前叫，GL 和遮罩同一幀；沒有就自己跑 */
+  var tick=function(){if(!done&&frame())end()};
+  if(!(window.Sky&&Sky.pre&&Sky.pre(tick)))(function step(){if(done)return;if(frame())end();else requestAnimationFrame(step)})();
   setTimeout(end,4000)}
 function render(){
   document.body.dataset.tab=G?'guest':tab;skyRender();
