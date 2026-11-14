@@ -596,10 +596,10 @@ setTimeout(function(){try{if(!window.Sky||!Sky.warm||fxMode()!=='gl')return;var 
 function skyRender(){var glass=S.theme==='glass'&&!!window.Sky;document.body.classList.toggle('th-glass',glass);var t0=nowMin(cur);
   if(glass){var D=DAYS[cur];Sky.set({scape:D.scape,lat:D.ll[0],lng:D.ll[1],at:skyAt(cur,t0),wx:skyWx(cur,t0)});Sky.on(true);Sky.poke()}
   else{if(window.Sky)Sky.on(false);sky(t0)}}
-var planAnim=true,lastTab='',arrFx=null;
-/* D3「到了／走了」：水滴落在手指按的地方，波經過哪裡、哪裡的字才換。
-   換畫面前把 #app 複製一份疊在上面當舊畫面；每一塊的延遲＝離落點的距離 ÷ 波速（跟 sky.js 第一圈一樣：畫面高 × 0.62／秒），上限 0.9 秒。
-   位置和文字都沒變的塊不動畫；逐字浮現只留給轉盤的大字；不加模糊。減少動態效果時直接換。 */
+var planAnim=true,lastTab='',arrFx=null,waveEnd=null;
+/* D3「到了／走了」：水滴落在手指按的地方（lastPt），從那裡用兩圈換頁（見下面 waveFx）。
+   換畫面前把 #app 複製一份疊在上面當舊頁；波速＝畫面高 × 0.62／秒（跟 sky.js 第一圈一樣）。減少動態效果時直接換。
+   同一時間只有一個轉場：新的開始前先把上一個收尾（waveEnd）。 */
 var lastPt=null;document.addEventListener('pointerdown',function(e){lastPt={x:e.clientX,y:e.clientY,t:Date.now()}},true);
 function dropFx(btn){var br=btn.getBoundingClientRect(),p=lastPt&&Date.now()-lastPt.t<1500?lastPt:{x:br.left+br.width/2,y:br.top+br.height/2};
   if(window.Sky&&Sky.drop)Sky.drop(p.x,p.y);if(calm)return;arrFx={x:p.x,y:p.y,t0:performance.now(),v:Math.max(300,innerHeight*.62)}}
@@ -647,7 +647,7 @@ function waveMask(el,x,y,a,b){var m='radial-gradient(circle at '+x.toFixed(1)+'p
 function waveFx(fx,old){if(!old)return;var E=WAVE_E,far=0;[[0,0],[innerWidth,0],[0,innerHeight],[innerWidth,innerHeight]].forEach(function(c){far=Math.max(far,Math.hypot(c[0]-fx.x,c[1]-fx.y))});
   var clr=function(el){el.style.webkitMaskImage='';el.style.maskImage=''},done=false,
     gd=fxMode()==='gl'?glDial(old,app):null,bob=fxMode()!=='cut',UO=bob?bobUnits(old,!!gd):[],UN=bob?bobUnits(app,!!gd):[],
-    end=function(){if(done)return;done=true;if(window.Sky&&Sky.pre)Sky.pre(null);clr(app);bobClear(UN);if(gd)gd.done();if(old.parentNode)old.remove();document.body.classList.remove('xfade');if(window.Sky&&Sky.wave)Sky.wave(null)},
+    to=0,end=function(){if(done)return;done=true;clearTimeout(to);if(waveEnd===end)waveEnd=null;if(window.Sky&&Sky.pre)Sky.pre(null);clr(app);bobClear(UN);if(gd)gd.done();if(old.parentNode)old.remove();document.body.classList.remove('xfade');if(window.Sky&&Sky.wave)Sky.wave(null)},
     frame=function(){var t=(performance.now()-fx.t0)/1000,Ro=t*fx.v,Rn=Math.max(0,t-WAVE_GAP)*fx.v;
       waveMask(old,fx.x,fx.y,'transparent '+Math.max(0,Ro-E).toFixed(1)+'px, #000 '+(Ro+E).toFixed(1)+'px');
       if(Rn<=0){app.style.webkitMaskImage=app.style.maskImage='linear-gradient(transparent,transparent)'}
@@ -656,15 +656,17 @@ function waveFx(fx,old){if(!old)return;var E=WAVE_E,far=0;[[0,0],[innerWidth,0],
       if(window.Sky&&Sky.wave)Sky.wave(fx.x,fx.y,Ro,Rn);return Rn-E>far};
   frame(); /* 跟換 innerHTML 同一段：新頁一開始就全遮，不會先閃一下 */
   if(gd&&Sky.draw)Sky.draw(); /* 轉盤的字剛從 DOM 藏起來，GL 這一刻就畫上 */
-  /* 有天空在跑：每一幀交給 sky.js 的 loop 在畫之前叫，GL 和遮罩同一幀；沒有就自己跑 */
+  /* sky.js 的 loop 每一幀在畫之前叫 tick，GL 和遮罩同一幀更新；自己的 rAF 也跑當保險（loop 停了也不會卡在半路）。兩邊都用當下時間算，重複叫沒關係 */
   var tick=function(){if(!done&&frame())end()};
-  if(!(window.Sky&&Sky.pre&&Sky.pre(tick)))(function step(){if(done)return;if(frame())end();else requestAnimationFrame(step)})();
-  setTimeout(end,4000)}
+  if(window.Sky&&Sky.pre)Sky.pre(tick);
+  (function step(){if(done)return;if(frame())end();else requestAnimationFrame(step)})();
+  to=setTimeout(end,4000);waveEnd=end}
 function render(){
   document.body.dataset.tab=G?'guest':tab;skyRender();
   if(G){tabsEl.hidden=true;app.innerHTML=vGuest();drawSheet();return}
   tabsEl.hidden=false;
   TABS.forEach(function(t,n){var b=tabsEl.children[n+1],on=tab===t[0];b.className=on?'on':'';if(on){b.setAttribute('aria-current','page');tabsEl.style.setProperty('--ti',n)}else b.removeAttribute('aria-current')});
+  if(arrFx&&waveEnd)waveEnd(); /* 上一個轉場還沒完：馬上收尾，複本才不會帶著遮罩、位移和藏起來的字 */
   var oldEl=arrFx?mkOld():null;noRoll=!!arrFx;
   app.innerHTML=tab==='now'?vNow():tab==='plan'?vPlan():vMore();
   noRoll=false;
