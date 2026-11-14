@@ -666,7 +666,7 @@ function render(){
   if(G){tabsEl.hidden=true;app.innerHTML=vGuest();drawSheet();return}
   tabsEl.hidden=false;
   TABS.forEach(function(t,n){var b=tabsEl.children[n+1],on=tab===t[0];b.className=on?'on':'';if(on){b.setAttribute('aria-current','page');tabsEl.style.setProperty('--ti',n)}else b.removeAttribute('aria-current')});
-  if(arrFx&&waveEnd)waveEnd(); /* 上一個轉場還沒完：馬上收尾，複本才不會帶著遮罩、位移和藏起來的字 */
+  if(waveEnd)waveEnd(); /* 轉場還沒完又要重畫（新的轉場、每分鐘重畫、切分頁…）：先把它收尾，複本和新內容才不會帶著遮罩、位移、藏起來的字 */
   var oldEl=arrFx?mkOld():null;noRoll=!!arrFx;
   app.innerHTML=tab==='now'?vNow():tab==='plan'?vPlan():vMore();
   noRoll=false;
