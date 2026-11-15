@@ -708,3 +708,5 @@ body.glgl.day .geoask{color:#14233B}
 #diag .dg-gps select,#diag .dg-gps input{height:36px;background:#222;color:#fff;border:1px solid #444;border-radius:8px;padding:0 8px;font-size:15px;width:100%;min-width:0}
 #diag .dg-row{display:flex;gap:6px}#diag .dg-row button{flex:1;height:36px;background:#333;color:#fff}
 #diag #fgmsg{margin:0;color:#ccc;font-size:12px}
+/* 「走了」：次要按鈕（跟「怎麼去」那一條同一種），不搶圓環和期限 */
+.stage .acts .bind.leave{margin-top:4px;font-size:15px;padding:7px 18px 7px 14px}

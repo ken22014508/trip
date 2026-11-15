@@ -211,7 +211,7 @@ function say(m){var i=m.i,now=m.now,tg=m.tg,o={st:'go'};
   var left=tg.time-now,spare=left-(tg.walk||0);o.big=fmt(tg.time);o.frac=left/120;o.st=spare<10?'tight':'go';o.dstat='還有 '+rem(left);
   var d0=m.kind==='here'&&m.pin==null&&!m.wi?m.dl:null;
   o.lab=tg.arrive?tg.what+' 前要到':(d0&&d0.soft?'想去'+d0.soft.name+'，':'')+'在'+tg.where+'搭'+tg.what;
-  o.dlab=tg.arrive?'幾點前到':d0&&d0.soft?'去'+d0.soft.name.slice(0,4)+'要搭':d0?'最晚搭':'搭';
+  var nn=m.next&&m.next.it.name.slice(0,5);o.dlab=tg.arrive?'幾點前到':d0&&d0.soft?'去'+d0.soft.name.slice(0,4)+'要搭':d0?'最晚搭':nn?(/^回/.test(nn)?nn:'去'+nn)+'要搭':'搭';
   if(m.kind==='here')o.status=spare>15?'還有 '+dur(left)+'，可以繼續逛':spare>0?'還有 '+dur(left)+'，該準備走了':'現在就要走';
   else o.status=left>0?'還有 '+dur(left):'現在';
   if(tg.walk)o.ref='走過去約 '+tg.walk+' 分（參考）';
@@ -334,7 +334,9 @@ function pvBar(t0){var dw=S.dwx||'',lab=DWX.filter(function(x){return x[0]===dw}
 function skyWx(i,t0){if((!isLive(i)||REH)&&S.dwx)return DWXV[S.dwx];var w=WX[ymd(dayDate(i))];if(!w||!w.h)return null;var h=w.h[Math.floor(t0/60)%24];
   return h?{cc:h.cc==null?(h.w>=3?80:h.w>=1?40:5):h.cc,pr:h.pr||0,code:h.w||0,ws:h.ws||0}:null}
 function skyAt(i,t0){var d=dayDate(i);return new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate(),0,t0)-TRIP.utc*3600000)}
-function head(m){var i=m.i,D=DAYS[i],where=m.st.here?'在 '+item(i,m.st.here).name:m.kind==='move'?'往 '+m.next.it.name:m.kind==='gap'?'往 '+m.gap.it.name:m.kind==='conf'?'往 '+m.is.it.name:D.name;
+/* 定位可用、但離所有地點都超過 1.5 公里：定位證明人不在行程上，不說「在 X」 */
+function farOff(m){var J=m.st&&m.st.J;return !!(J&&J.gps&&J.far!=null&&J.far>1500)}
+function head(m){var i=m.i,D=DAYS[i],where=farOff(m)?'下一個期限':m.st.here?'在 '+item(i,m.st.here).name:m.kind==='move'?'往 '+m.next.it.name:m.kind==='gap'?'往 '+m.gap.it.name:m.kind==='conf'?'往 '+m.is.it.name:D.name;
   return '<header class="hd"><div><b>'+esc(where)+'</b><span>'+esc(D.name)+'　'+dlabel(i)+'</span></div>'+wxNow(i,m.now)
    +'</header>'+pvBar(m.now)+locLine(m)}
 /* L1：app 判斷你在哪，一句話；點了可以修正 */
@@ -342,11 +344,17 @@ function locTxt(m){var J=m.st.J,i=m.i;if(!J)return '';var it=J.here&&item(i,J.he
   if(J.src==='gps')t='你在'+nm(J.at);
   else if(J.src==='near')t='你離'+pname(i,J.at)+'約 '+mtxt(J.d);
   else if(J.src==='user')t=(F&&F.left&&!J.here?'剛離開'+pname(i,J.at):'你在'+nm(J.at))+'（你選的）';
+  else if(farOff(m))return '離行程有點遠，最近的是'+pname(i,J.nearP)+'（約 '+mtxt(J.far)+'）';
   else if(J.here)t='照時間推估：你在'+nm(J.at);
   else{var nx=m.next,h0=nx&&nx.ride&&nx.ride.hops[0];
     t=nx&&!(h0&&!h0.walk&&h0.from===J.at&&h0.dep>=m.now)?'照時間推估：在往'+nx.it.name+'的路上':'照時間推估：你在'+pname(i,J.at)}
   if(J.far!=null&&J.far>1500)t+='。定位離行程有點遠';
   return t}
+/* 人在路上（照時間推估在路上、剛按了走了、正走向某個地點）：回傳要去的地方，否則空字串 */
+function moving(m){var J=m.st.J;if(!J||J.here||farOff(m))return '';var nx=m.next,h0=nx&&nx.ride&&nx.ride.hops[0];
+  if(J.src==='near')return pname(m.i,J.at);
+  if(J.src==='gps')return '';
+  if(nx&&!(h0&&!h0.walk&&h0.from===J.at&&h0.dep>=m.now))return nx.it.name;return ''}
 function locLine(m){var t=locTxt(m);if(!t)return '';var J=m.st.J;
   return '<button class="bind locl" data-sheet="loc">'+ico('pin')+'<span>'+esc(t)+'</span>'+(J.gps&&J.gps.fake?'<i class="fk">假定位</i>':'')+ico('chev')+'</button>'}
 /* 旅程期間第一次打開、還沒給過定位權限：一句話說用途，請求一次；被拒絕就不再問 */
@@ -409,7 +417,7 @@ function lostLine(m){return m.lost.length&&!m.wi?'<div class="ref lost">'+ico('s
 /* 主按鈕：在景點是「走了」（不是必要的：沒按的話，定位離開就自動算走了）。L1 拿掉「到了」：在哪由定位和時間判斷，錯了點位置那一行修正 */
 function mainBtn(m){if(m.wi&&!wdrag)return '<button class="gb2" data-wi="no">'+ico('undo')+'取消</button>'+(m.wi.bad?'':'<button class="pb" data-wi="ok">'+ico('check')+'待到 '+fmt(m.wi.t)+'</button>');
   if(wdrag)return '';
-  if(m.st.here)return '<button class="pb" data-done="'+m.st.here+'">'+ico('check')+'走了</button>';
+  if(m.st.here&&!farOff(m))return '<button class="bind leave" data-done="'+m.st.here+'">'+ico('check')+'走了</button>';
   return ''}
 /* 沒有可靠的位置（照時間推估，或定位離行程超過 1.5 公里）時，主角改成不靠位置的資訊：下一個有時間的期限 */
 function nextDue(m){var rows=m.pl?m.pl.rows.slice(m.st.here?1:0):[];
@@ -431,8 +439,10 @@ function vNow(){var m=vmOf(cur),o=say(m),tg=m.tg,body=dial(o.frac,esc(o.dlab||o.
   if(!m.wi&&m.kind!=='conf'&&m.kind!=='gap'&&o.ref)body+='<div class="ref">'+esc(o.ref)+'</div>';
   var btn=mainBtn(m),acts=btn?'<div class="acts">'+btn+'</div>':'';
   var extra=(m.kind==='here'||m.kind==='move')&&!m.wi?lostLine(m):'';
-  /* 走過了、但是一定要去的：問一聲，可以加回來（有空再去的不問） */
-  if(J&&!m.wi&&!wdrag)J.passed.forEach(function(id){var x=item(i,id);if(x&&x.kind!=='soft')extra+='<div class="ref back">還沒去「'+esc(x.name)+'」？<button class="mini" data-back="'+id+'">加回來</button></div>'});
+  /* 走過了、但是一定要去的：位置確定、照計畫還不可能去完、還排得進，才問一聲（最多一個）。規則在 planner.js askBack */
+  if(J&&!m.wi&&!wdrag){var dn0={},dr0={},ct0={},ex0={};DAYS[i].items.forEach(function(x){var k=K(i,x.id);if(S.done[k]!=null)dn0[x.id]=1;if(S.drop[k])dr0[x.id]=1;if(S.cut[k])ct0[x.id]=1;if(S.ext[k])ex0[x.id]=S.ext[k]});
+    var ab=TripPlanner.askBack(DAYS[i],{P:PL[i],now:m.now,done:dn0,drop:dr0,cut:ct0,ext:ex0},J),ax=ab&&item(i,ab);
+    if(ax)extra+='<div class="ref back">還沒去「'+esc(ax.name)+'」？<button class="mini" data-back="'+ab+'">加回來</button></div>'}
   if(m.kind==='here'||m.kind==='move')extra+=strip(m);
   var ask=m.wi||wdrag?'':'<button class="askbar" data-sheet="change">'+ico('chat')+'<span>計畫有變？</span>'+ico('chev')+'</button>';
   return '<section class="stage one '+o.st+'">'+head(m)+geoAsk()+body+acts+extra+ask+'</section>'}
@@ -595,9 +605,10 @@ function sheetHtml(){if(!sh)return '';var i=cur,D=DAYS[i],h='';
     return '<div class="desk"><button class="ib x" data-close="1" aria-label="關閉">'+ico('x')+'</button><div class="jp">'+esc(H.jp)+'</div><div class="en">'+esc(H.en)+'</div>'
      +'<div class="cds">'+H.codes.filter(shown).map(function(c){return '<div class="cc"><div class="code">'+esc(c.c)+'</div><div class="cd">'+esc(c.d)+'</div></div>'}).join('')+'</div>'
      +'<dl class="kv"><dt>Name</dt><dd>'+esc(TRIP.who)+'</dd><dt>Check-in</dt><dd>'+esc(H.ci)+'</dd><dt>Check-out</dt><dd>'+esc(H.co)+'</dd><dt>Payment</dt><dd>'+esc(H.pay)+'</dd></dl></div>'}
-  if(sh.t==='loc'){var mL=vmOf(i),JL=mL.st.J,ps=placeOrder(i),F=S.fix[DK(i)];
-    h='<div class="ty">你現在在哪？</div><div class="st">'+esc(locTxt(mL))+'</div><p class="sub">判斷錯了就點你現在在的地方，app 會照這裡重排。</p><div class="menu">'
-     +ps.map(function(p){var its=D.items.filter(function(x){return x.place===p}).map(function(x){return x.name}),on=p===JL.at;
+  if(sh.t==='loc'){var mL=vmOf(i),JL=mL.st.J,ps=placeOrder(i),F=S.fix[DK(i)],mv=moving(mL);
+    h='<div class="ty">你現在在哪？</div><div class="st">'+esc(locTxt(mL))+'</div><p class="sub">判斷錯了就點你現在在的地方，app 會照這裡重排。</p>'
+     +'<div class="menu">'
+     +ps.map(function(p){var its=D.items.filter(function(x){return x.place===p}).map(function(x){return x.name}),on=!mv&&!farOff(mL)&&p===JL.at;
        return '<button data-locfix="'+p+'"'+(on?' aria-current="true"':'')+'><span>'+esc(pname(i,p))+'<small>'+esc(its.length?its.join('、'):'轉乘')+'</small></span>'+(on?ico('check'):ico('chev'))+'</button>'}).join('')+'</div>'
      +(F?'<div class="grid one"><button class="gb" data-locfix="">不用我選，交給 app 判斷</button></div>':'');
     return h}

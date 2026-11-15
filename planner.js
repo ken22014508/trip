@@ -132,7 +132,7 @@ function Planner(day){
    回傳 {at, here, t, arrT, passed[], src, far, d, anchor}
      src：gps 在某個地點的範圍內／near 離最近的地點 1.5 公里內／time 照時間推估／user 照使用者的修正
      t：給引擎的出發時間（在某地＝現在；near＝現在＋走過去；照時間推估、在路上＝從上一站出發的時間）
-     far：離最近的地點多遠（公尺，不在任何地點範圍內才有）；anchor：上一次確定的點（gps／user），下次照時間推估從這裡算
+     far：離最近的地點多遠（公尺，不在任何地點範圍內才有）；nearP：照時間推估但有定位時，最近的地點；anchor：上一次確定的點（gps／user），下次照時間推估從這裡算
      passed：行程順序排在現在位置前面、還沒去的項目（引擎當作去過）。照時間推估時，起點那一項（確定在那裡過）不算在內 */
 var GPS_AGE=120,GPS_ACC=1000,R_DEF=200,R_MAX=500,NEAR=1500,WALK=70,LEAVE_PAD=150,FIX_PAD=300;
 function dist(a,b){var R=6371000,r=Math.PI/180,d1=(b[0]-a[0])*r,d2=(b[1]-a[1])*r,
@@ -190,8 +190,23 @@ function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},I
     if(pl.unknown)res={at:pp,here:null,t:pt,ri:idx(pl.unknown.it.id)};
     else if(lastR&&lastR.it.id===IT[IT.length-1].id)res={at:lastR.it.place,here:lastR.it.id,t:now,arrT:lastR.arr,ri:idx(lastR.it.id)};
     else res={at:pp,here:null,t:pt,ri:IT.length}}
-  res.far=farD!=null?farD:null;res.d=null;
+  res.far=farD!=null?farD:null;res.d=null;if(farD!=null)res.nearP=nr.p;
   return out(res,'time',A)}
+/* 「還沒去 Y？」要不要問（L1，11/15 Fable 修正）：三個條件都成立才問，最多一個（照行程順序最前面的）
+   1. 位置是確定的（gps／user）；照時間推估一律不問，當作照計畫去過了
+   2. 現在早於原訂計畫離開 Y 的時間（照計畫這時候還不可能去完，比較可能是跳過了）
+   3. Y 還排得進今天剩下的行程（排得出來、不會讓一定要去的趕不上）
+   o＝{P, now, done, drop, cut, ext}（done 只放真的記過的，不含 passed） */
+function askBack(D,o,J){if(!J||!(J.src==='gps'||J.src==='user')||!J.passed||!J.passed.length)return null;
+  var P=o.P||Planner(D),IT=D.items,lv={},k;P.plan({at:D.startAt,t:hm(D.start),here:null,done:{},drop:{},cut:{},ext:{}}).rows.forEach(function(r){lv[r.it.id]=r.leave});
+  for(var n=0;n<J.passed.length;n++){var id=J.passed[n],it=IT.filter(function(x){return x.id===id})[0];
+    if(!it||it.kind==='soft'||lv[id]==null||!(o.now<lv[id]))continue;
+    var st={at:J.at,t:J.t,here:J.here,arrT:J.arrT,done:{},drop:{},cut:o.cut||{},ext:o.ext||{}};
+    for(k in (o.done||{}))st.done[k]=1;for(k in (o.drop||{}))st.drop[k]=1;J.passed.forEach(function(x){if(x!==id)st.done[x]=1});
+    var H0=P.hard(st,{drop:(function(){var d={};d[id]=1;return d})()}),ids=IT.map(function(x){return x.id}).filter(function(x){return x!==id});
+    for(var pos=0;pos<=ids.length;pos++){var o2=ids.slice();o2.splice(pos,0,id);var H=P.hard(st,{order:o2});
+      if(!H.fail&&!(H.gap&&!H0.gap)&&!H.lost.some(function(x){return x.id===id}))return id}}
+  return null}
 function state(at,t,here,arr){return {here:here||null,arrT:arr?hm(arr):hm(t),at:at,t:hm(t),done:{},drop:{},cut:{},ext:{},pick:{}}}
 /* 套用行程開關：days 對調、項目／路段的 show 條件、走路路段自動雙向。app 和檢查工具共用這一份 */
 function prepare(DAYS,SW,sw){function shown(x){if(!x||!x.show)return true;var p=x.show.split('=');return p[1].split('|').indexOf(sw[p[0]])>=0}
@@ -205,5 +220,5 @@ function prepare(DAYS,SW,sw){function shown(x){if(!x||!x.show)return true;var p=
       else if(L.show&&!shown(L))delete D.legs[k]});
     Object.keys(D.legs).forEach(function(k){var L=D.legs[k],p=k.split('>'),r=p[1]+'>'+p[0];if((L.walk!=null||L.freq)&&!L.oneway&&!D.legs[r])D.legs[r]=L})});
   return DAYS}
-return {Planner:Planner,state:state,hm:hm,fmt:fmt,prepare:prepare,judge:judge,dist:dist}})();
+return {Planner:Planner,state:state,hm:hm,fmt:fmt,prepare:prepare,judge:judge,askBack:askBack,dist:dist}})();
 if(typeof module!=='undefined')module.exports=TripPlanner;
