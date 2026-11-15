@@ -695,3 +695,16 @@ body.th-glass .desk .kv{margin-top:10px;padding:16px 18px}
 #diag .dg-fx{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 10px}#diag .dg-fx span{width:100%;color:#aaa}#diag .dg-fx button{width:auto;flex:1;height:36px;background:#333;color:#fff}#diag .dg-fx button.on{background:#fff;color:#000}
 .bc{display:inline-block}
 .roll > .cl{display:inline-block}
+/* L1 位置說明：標題下面一行，點了修正 */
+.stage .locl{max-width:100%;margin:2px 0 4px;font-size:13.5px;text-align:left}
+.stage .locl{border-radius:18px}.stage .locl span{min-width:0;white-space:normal;line-height:1.35}
+.locl .fk{font-style:normal;font-size:11px;padding:1px 6px;border-radius:6px;background:rgba(255,194,51,.85);color:#3a2a00;flex:none}
+.geoask{margin:8px 0;padding:12px 14px;border-radius:16px;background:rgba(255,255,255,.1);font-size:14px;text-align:left}
+.geoask p{margin:0 0 8px}
+.stage .ref.back{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:8px;width:100%;white-space:normal;font-size:14px}.stage .ref.back .mini{flex:none}
+.ref.due{margin-top:8px;font-size:14px;color:rgba(255,255,255,.8)}
+body.glgl.day .geoask{color:#14233B}
+#diag .dg-gps{display:flex;flex-direction:column;gap:6px;margin:0 0 10px}#diag .dg-gps>span{color:#aaa}
+#diag .dg-gps select,#diag .dg-gps input{height:36px;background:#222;color:#fff;border:1px solid #444;border-radius:8px;padding:0 8px;font-size:15px;width:100%;min-width:0}
+#diag .dg-row{display:flex;gap:6px}#diag .dg-row button{flex:1;height:36px;background:#333;color:#fff}
+#diag #fgmsg{margin:0;color:#ccc;font-size:12px}

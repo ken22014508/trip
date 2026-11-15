@@ -126,6 +126,72 @@ function Planner(day){
     if(pl.issues.length){var s4=JSON.parse(JSON.stringify(st));s4.t=T;s4.done[st.here]=1;s4.here=null;var rx=relax(s4);return '待到 '+t+' 的話：「'+pl.issues[0].it.name+'」'+pl.issues[0].why+'。'+(rx.length?'要這樣做的話：'+rx[0].say+'。':'用現有資料排不出解法。'+((rx.fail||[])[0]||''))}
     return '待到 '+t+' 之後算不出來：'+P[pl.unknown.from]+' → '+P[pl.unknown.it.place]+(pl.unknown.partial?' 已知的班次都過了。':' 沒有資料。')}
   return {plan:plan,hard:hard,limits:limits,latest:latest,relax:relax,brief:brief,early:early,goto:goto,stayUntil:stayUntil,ok:ok}}
+/* L1 自動判斷位置：用定位＋時間判斷人在哪。純函式，app 和 node 測試共用。
+   D＝套用開關後的那一天；o＝{now 分鐘, gps:{ll:[緯,經],acc 公尺,age 秒}｜null, fix 使用者的修正 {at,here,t}｜null,
+     prev 上次判斷的結果｜null, done/drop/back：{項目id:1}（back＝使用者按了「加回來」）, P：Planner(D)（可省）}
+   回傳 {at, here, t, arrT, passed[], src, far, d, anchor}
+     src：gps 在某個地點的範圍內／near 離最近的地點 1.5 公里內／time 照時間推估／user 照使用者的修正
+     t：給引擎的出發時間（在某地＝現在；near＝現在＋走過去；照時間推估、在路上＝從上一站出發的時間）
+     far：離最近的地點多遠（公尺，不在任何地點範圍內才有）；anchor：上一次確定的點（gps／user），下次照時間推估從這裡算
+     passed：行程順序排在現在位置前面、還沒去的項目（引擎當作去過）。照時間推估時，起點那一項（確定在那裡過）不算在內 */
+var GPS_AGE=120,GPS_ACC=1000,R_DEF=200,R_MAX=500,NEAR=1500,WALK=70,LEAVE_PAD=150,FIX_PAD=300;
+function dist(a,b){var R=6371000,r=Math.PI/180,d1=(b[0]-a[0])*r,d2=(b[1]-a[1])*r,
+  h=Math.sin(d1/2)*Math.sin(d1/2)+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.sin(d2/2)*Math.sin(d2/2);return 2*R*Math.asin(Math.sqrt(h))}
+function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},IT=D.items,done=o.done||{},drop=o.drop||{},back=o.back||{};
+  var g=o.gps&&o.gps.ll&&o.gps.age<=GPS_AGE&&o.gps.acc<=GPS_ACC?o.gps:null;
+  function rng(p){return Math.min((RAD[p]||R_DEF)+(g?g.acc:0),R_MAX)}
+  function dTo(p){return g&&L2[p]?dist(g.ll,L2[p]):Infinity}
+  function open(id){return !done[id]&&!drop[id]}
+  function idx(id){for(var n=0;n<IT.length;n++)if(IT[n].id===id)return n;return -1}
+  function item(id){return IT[idx(id)]}
+  function stayEnd(id,t){var it=item(id);if(!it)return t;var e=t+(it.stay||0);if(it.hold)e=Math.max(e,hm(it.hold));return e}
+  /* 照原訂時間（當天出發點、預定出門）排一次：每個地點「計畫上什麼時候會在這裡、是為了去哪個項目」 */
+  var base=null;function visits(p){if(!base)base=P.plan({at:D.startAt,t:hm(D.start),here:null,done:{},drop:{},cut:{},ext:{}});var V=[];
+    if(p===D.startAt)V.push({t:hm(D.start),ri:0,start:1});
+    base.rows.forEach(function(r){var n=idx(r.it.id);if(r.ride)r.ride.hops.forEach(function(h){if(h.from===p)V.push({t:h.dep,ri:n});if(h.to===p&&r.it.place!==p)V.push({t:h.arr,ri:n})});
+      if(r.it.place===p)V.push({t:r.arr,ri:n,item:r.it.id})});return V}
+  /* 人在地點 p：這裡有還沒去的項目 → here＝照順序第一個；出發點同時是最後一站（飯店）時，看時間比較接近出門還是回來 */
+  function at(p){var c=IT.filter(function(x){return x.place===p&&open(x.id)}),V=visits(p),near=null;
+    V.forEach(function(v){if(v.item&&!open(v.item))return;if(!near||Math.abs(v.t-now)<Math.abs(near.t-now))near=v});
+    if(c.length&&!(near&&near.start))return {here:c[0].id,ri:idx(c[0].id)};
+    return {here:null,ri:near?near.ri:-1}}
+  function passed(ri){var out=[];for(var n=0;n<ri&&n<IT.length;n++){var id=IT[n].id;if(open(id)&&!back[id])out.push(id)}return out}
+  function out(r,src,anchor){r.src=src;r.passed=passed(r.ri).filter(function(id){return !(src==='time'&&anchor&&anchor.here===id)});delete r.ri;if(r.arrT==null)r.arrT=r.t;
+    r.anchor=anchor!==undefined?anchor:(src==='gps'||src==='user'?{at:r.at,here:r.here,t:r.here?r.arrT:r.t}:(o.prev&&o.prev.anchor)||null);return r}
+  function keepArr(here){return o.prev&&o.prev.here===here&&o.prev.arrT!=null?o.prev.arrT:now}
+  /* 1. 使用者的修正：有定位時離修正的地點超出範圍再多 300 公尺就失效；沒有定位時維持到那一項預定的停留時間結束 */
+  /* fix.pick＝使用者在清單上點了一個地點：這裡有還沒去的項目就當作在那一項（跟定位同一條規則）；fix.left＝按了「走了」 */
+  var F=o.fix,fh=null;if(F&&F.here&&!open(F.here))F=null;
+  if(F){fh=F.here||(F.pick?at(F.at).here:null);var ok;if(g&&L2[F.at])ok=dTo(F.at)<=rng(F.at)+FIX_PAD;else ok=now<=(fh?stayEnd(fh,F.t):F.t);
+    if(ok){var a1=at(F.at);return out({at:F.at,here:fh,t:fh||g?now:F.t,arrT:fh?F.t:null,ri:fh?idx(fh):a1.ri,d:g&&L2[F.at]?dTo(F.at):null},'user')}}
+  if(g){/* 2. 在某個地點的範圍內（多個取最近）。已經判斷在 A：離開 A 要超出範圍再多 150 公尺 */
+    var pv=o.prev&&(o.prev.src==='gps'||o.prev.src==='user')?o.prev.at:null,best=null,nr=null;
+    Object.keys(D.places).forEach(function(p){var d=dTo(p);if(d===Infinity)return;if(!nr||d<nr.d)nr={p:p,d:d};
+      if(d<=rng(p)+(p===pv?LEAVE_PAD:0)&&(!best||d<best.d))best={p:p,d:d}});
+    if(best){var a2=at(best.p);return out({at:best.p,here:a2.here,t:now,arrT:a2.here?keepArr(a2.here):null,ri:a2.ri,d:best.d,far:0},'gps')}
+    /* 3. 不在任何地點的範圍內：1.5 公里內當作正走過去 */
+    if(nr&&nr.d<=NEAR){var a3=at(nr.p);return out({at:nr.p,here:null,t:now+Math.ceil(nr.d/WALK),ri:a3.here?idx(a3.here):a3.ri,d:nr.d,far:nr.d},'near')}
+    var farD=nr?nr.d:null}
+  /* 4. 照時間推估：從上一次確定的點（沒有就是出發點、預定出門）照計畫往下走 */
+  var A=(o.prev&&o.prev.anchor)||null;if(F&&(!A||F.t>=A.t))A={at:F.at,here:fh,t:F.t};
+  var st={at:A?A.at:D.startAt,t:A?A.t:hm(D.start),here:A&&A.here&&open(A.here)?A.here:null,done:{},drop:{},cut:{},ext:{}},k;
+  for(k in done)st.done[k]=1;for(k in drop)st.drop[k]=1;st.arrT=st.t;
+  /* 起點前面還沒去的（那時候就算走過了）也當作去過，不然會排回頭 */
+  if(A)passed(st.here?idx(st.here):at(st.at).ri).forEach(function(id){st.done[id]=1});
+  var pl=P.hard(st,st.here?{leaveAt:stayEnd(st.here,st.t)}:{}).pl,pp=st.at,pt=st.t,res=null;
+  for(var n=0;n<pl.rows.length&&!res;n++){var r=pl.rows[n];
+    if(now<r.arr){/* 還沒到 r：如果第一段是車、還沒發車，人其實還在上一站等（上一站是景點就還算在那裡） */
+      var h0=r.ride&&r.ride.hops[0],wait=h0&&!h0.walk&&now<h0.dep&&h0.from===pp,pr=n>0?pl.rows[n-1]:null;
+      if(wait&&pr&&pr.it.place===pp)res={at:pp,here:pr.it.id,t:now,arrT:pr.arr,ri:idx(pr.it.id)};
+      else res={at:pp,here:null,t:pt,ri:idx(r.it.id)}}
+    else if(now<=r.leave)res={at:r.it.place,here:r.it.id,t:now,arrT:r.arr,ri:idx(r.it.id)};
+    pp=r.it.place;pt=r.leave}
+  if(!res){var lastR=pl.rows[pl.rows.length-1];
+    if(pl.unknown)res={at:pp,here:null,t:pt,ri:idx(pl.unknown.it.id)};
+    else if(lastR&&lastR.it.id===IT[IT.length-1].id)res={at:lastR.it.place,here:lastR.it.id,t:now,arrT:lastR.arr,ri:idx(lastR.it.id)};
+    else res={at:pp,here:null,t:pt,ri:IT.length}}
+  res.far=farD!=null?farD:null;res.d=null;
+  return out(res,'time',A)}
 function state(at,t,here,arr){return {here:here||null,arrT:arr?hm(arr):hm(t),at:at,t:hm(t),done:{},drop:{},cut:{},ext:{},pick:{}}}
 /* 套用行程開關：days 對調、項目／路段的 show 條件、走路路段自動雙向。app 和檢查工具共用這一份 */
 function prepare(DAYS,SW,sw){function shown(x){if(!x||!x.show)return true;var p=x.show.split('=');return p[1].split('|').indexOf(sw[p[0]])>=0}
@@ -139,5 +205,5 @@ function prepare(DAYS,SW,sw){function shown(x){if(!x||!x.show)return true;var p=
       else if(L.show&&!shown(L))delete D.legs[k]});
     Object.keys(D.legs).forEach(function(k){var L=D.legs[k],p=k.split('>'),r=p[1]+'>'+p[0];if((L.walk!=null||L.freq)&&!L.oneway&&!D.legs[r])D.legs[r]=L})});
   return DAYS}
-return {Planner:Planner,state:state,hm:hm,fmt:fmt,prepare:prepare}})();
+return {Planner:Planner,state:state,hm:hm,fmt:fmt,prepare:prepare,judge:judge,dist:dist}})();
 if(typeof module!=='undefined')module.exports=TripPlanner;
