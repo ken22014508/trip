@@ -185,7 +185,10 @@ function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},I
   /* 4. 照時間推估：從上一次確定的點（沒有就是出發點、預定出門）照計畫往下走 */
   var A=(o.prev&&o.prev.anchor)||null;if(F&&(!A||F.t>=A.t))A={at:F.at,here:fh,t:F.t};
   var st={at:A?A.at:D.startAt,t:A?A.t:hm(D.start),here:A&&A.here&&open(A.here)?A.here:null,done:{},drop:{},cut:{},ext:{}},k;
-  for(k in done)st.done[k]=1;for(k in drop)st.drop[k]=1;st.arrT=st.t;
+  for(k in done)st.done[k]=1;for(k in drop)st.drop[k]=1;
+  /* 起點是出發點、還沒到預定出門：照預定出門排（舊的「上次判斷」可能存了半夜的時間） */
+  if(st.at===D.startAt&&!st.here&&st.t<hm(D.start)&&!Object.keys(st.done).length)st.t=hm(D.start);
+  st.arrT=st.t;
   /* 起點前面還沒去的（那時候就算走過了）也當作去過，不然會排回頭 */
   if(A)passed(st.here?idx(st.here):at(st.at).ri).forEach(function(id){st.done[id]=1});
   var pl=P.hard(st,st.here?{leaveAt:stayEnd(st.here,st.t)}:{}).pl,pp=st.at,pt=st.t,res=null;
@@ -193,7 +196,7 @@ function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},I
     if(now<r.arr){/* 還沒到 r：如果第一段是車、還沒發車，人其實還在上一站等（上一站是景點就還算在那裡） */
       var h0=r.ride&&r.ride.hops[0],wait=h0&&!h0.walk&&now<h0.dep&&h0.from===pp,pr=n>0?pl.rows[n-1]:null;
       if(wait&&pr&&pr.it.place===pp)res={at:pp,here:pr.it.id,t:now,arrT:pr.arr,ri:idx(pr.it.id)};
-      else res={at:pp,here:null,t:pt,ri:idx(r.it.id)}}
+      else res={at:pp,here:null,t:pt,ri:idx(r.it.id),wait:now<pt?1:0}}/* wait：還沒到出發時間，人還在上一站（例如還沒出門） */
     else if(now<=r.leave)res={at:r.it.place,here:r.it.id,t:now,arrT:r.arr,ri:idx(r.it.id)};
     pp=r.it.place;pt=r.leave}
   if(!res){var lastR=pl.rows[pl.rows.length-1];

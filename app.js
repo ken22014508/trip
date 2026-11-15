@@ -348,6 +348,7 @@ function locTxt(m){var J=m.st.J,i=m.i;if(!J)return '';var it=J.here&&item(i,J.he
   else if(J.route)return '你在往'+pname(i,J.route.to)+'的路上';
   else if(farOff(m))return '離行程有點遠，最近的是'+pname(i,J.nearP)+'（約 '+mtxt(J.far)+'）';
   else if(J.here)t='照時間推估：你在'+nm(J.at);
+  else if(J.wait)t='照時間推估：你在'+pname(i,J.at);
   else{var nx=m.next,h0=nx&&nx.ride&&nx.ride.hops[0];
     t=nx&&!(h0&&!h0.walk&&h0.from===J.at&&h0.dep>=m.now)?'照時間推估：在往'+nx.it.name+'的路上':'照時間推估：你在'+pname(i,J.at)}
   if(J.far!=null&&J.far>1500)t+='。定位離行程有點遠';
@@ -356,7 +357,7 @@ function locTxt(m){var J=m.st.J,i=m.i;if(!J)return '';var it=J.here&&item(i,J.he
 function moving(m){var J=m.st.J;if(!J||J.here||farOff(m))return '';var nx=m.next,h0=nx&&nx.ride&&nx.ride.hops[0];
   if(J.src==='near')return pname(m.i,J.at);
   if(J.route)return pname(m.i,J.route.to);
-  if(J.src==='gps')return '';
+  if(J.src==='gps'||J.wait)return '';
   if(nx&&!(h0&&!h0.walk&&h0.from===J.at&&h0.dep>=m.now))return nx.it.name;return ''}
 function locLine(m){var t=locTxt(m);if(!t)return '';var J=m.st.J;
   return '<button class="bind locl" data-sheet="loc">'+ico('pin')+'<span>'+esc(t)+'</span>'+(J.gps&&J.gps.fake?'<i class="fk">假定位</i>':'')+ico('chev')+'</button>'}
