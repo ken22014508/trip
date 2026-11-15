@@ -159,7 +159,9 @@ function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},I
     if(c.length&&!(near&&near.start))return {here:c[0].id,ri:idx(c[0].id)};
     return {here:null,ri:near?near.ri:-1}}
   function passed(ri){var out=[];for(var n=0;n<ri&&n<IT.length;n++){var id=IT[n].id;if(open(id)&&!back[id])out.push(id)}return out}
-  function out(r,src,anchor){r.src=src;r.passed=passed(r.ri).filter(function(id){return !(src==='time'&&anchor&&anchor.here===id)});delete r.ri;if(r.arrT==null)r.arrT=r.t;
+  function out(r,src,anchor){r.src=src;
+    /* 還在出發點、還沒到預定出門時間：從預定出門時間開始排（不然半夜打開會排到首班車） */
+    if(r.at===D.startAt&&!r.here&&r.t<hm(D.start)&&!passed(r.ri).length)r.t=hm(D.start);r.passed=passed(r.ri).filter(function(id){return !(src==='time'&&anchor&&anchor.here===id)});delete r.ri;if(r.arrT==null)r.arrT=r.t;
     r.anchor=anchor!==undefined?anchor:(src==='gps'||src==='user'?{at:r.at,here:r.here,t:r.here?r.arrT:r.t}:(o.prev&&o.prev.anchor)||null);return r}
   function keepArr(here){return o.prev&&o.prev.here===here&&o.prev.arrT!=null?o.prev.arrT:now}
   /* 1. 使用者的修正：有定位時離修正的地點超出範圍再多 300 公尺就失效；沒有定位時維持到那一項預定的停留時間結束 */
