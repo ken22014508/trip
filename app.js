@@ -414,10 +414,13 @@ function fixOpts(m){var i=m.i,h='';
       +'<a class="opt ghost" href="'+transitUrl(i,g.it.place)+'" target="_blank" rel="noopener">用 Google Maps 查路線</a>'}
   return h?'<div class="opts">'+h+'</div>':''}
 function lostLine(m){return m.lost.length&&!m.wi?'<div class="ref lost">'+ico('skip')+'去不了了：'+esc(names(m.lost))+'</div>':''}
-/* 主按鈕：在景點是「走了」（不是必要的：沒按的話，定位離開就自動算走了）。L1 拿掉「到了」：在哪由定位和時間判斷，錯了點位置那一行修正 */
+/* 定位現在能用（新、準，planner 也採用了）：離開會自動記，不需要「走了」 */
+function liveLoc(m){var J=m.st&&m.st.J,g=J&&J.gps;return !!(g&&g.age<=120&&g.acc<=1000)}
+/* 主按鈕：「走了」只在拿不到定位時出現（11/15 Ken：沒必要的藏起來，需要時再出現）。有定位時離開會自動記。
+   L1 拿掉「到了」：在哪由定位和時間判斷，錯了點位置那一行修正 */
 function mainBtn(m){if(m.wi&&!wdrag)return '<button class="gb2" data-wi="no">'+ico('undo')+'取消</button>'+(m.wi.bad?'':'<button class="pb" data-wi="ok">'+ico('check')+'待到 '+fmt(m.wi.t)+'</button>');
   if(wdrag)return '';
-  if(m.st.here&&!farOff(m))return '<button class="bind leave" data-done="'+m.st.here+'">'+ico('check')+'走了</button>';
+  if(m.st.here&&!liveLoc(m))return '<button class="bind leave" data-done="'+m.st.here+'">'+ico('check')+'走了</button>';
   return ''}
 /* 沒有可靠的位置（照時間推估，或定位離行程超過 1.5 公里）時，主角改成不靠位置的資訊：下一個有時間的期限 */
 function nextDue(m){var rows=m.pl?m.pl.rows.slice(m.st.here?1:0):[];
