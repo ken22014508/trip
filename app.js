@@ -156,9 +156,10 @@ function passedOrder(i,st){var P=PL[i],ids=DAYS[i].items.map(function(x){return 
     if(hit)order=hit;else order.splice(ids.indexOf(b),0,b)});
   return order}
 /* 這一段路「幾點、要在哪裡」：第一個有班次的，沒有就看目的地有沒有時間 */
-function target(i,row,now){if(!row)return null;var R=row.ride,walk=0;
-  if(R){for(var n=0;n<R.hops.length;n++){var h=R.hops[n];if(now!=null&&h.dep<now&&!h.walk){walk=0;continue}if(h.walk){walk+=h.arr-h.dep;continue}
-    return {time:h.dep,what:h.how,where:pname(i,h.from),place:h.from,walk:walk,last:h.last,fixed:h.fixed}}}
+function target(i,row,now){if(!row)return null;var R=row.ride,walk=0,wh=[];
+  if(R){for(var n=0;n<R.hops.length;n++){var h=R.hops[n];if(now!=null&&h.dep<now&&!h.walk){walk=0;wh=[];continue}if(h.walk){walk+=h.arr-h.dep;wh.push(h.how);continue}
+    /* 前面那段有寫名字（例如騎車）：顯示時用它的名字，不說「走過去」 */
+    return {time:h.dep,what:h.how,where:pname(i,h.from),place:h.from,walk:walk,wname:wh.length===1&&!/^走路 /.test(wh[0])?wh[0]:null,last:h.last,fixed:h.fixed}}}
   if(row.it.at)return {time:TripPlanner.hm(row.it.at),what:row.it.name,where:pname(i,row.it.place),place:row.it.place,walk:walk,arrive:1};
   return {free:1,walk:walk,arr:row.arr,what:row.it.name,place:row.it.place}}
 function hopsTxt(R){return R?R.hops.map(function(h){return h.walk?h.how:fmt(h.dep)+' '+h.how}).join(' → '):''}
@@ -214,7 +215,7 @@ function say(m){var i=m.i,now=m.now,tg=m.tg,o={st:'go'};
   var nn=m.next&&m.next.it.name.slice(0,5);o.dlab=tg.arrive?'幾點前到':d0&&d0.soft?'去'+d0.soft.name.slice(0,4)+'要搭':d0?'最晚搭':nn?(/^回/.test(nn)?nn:'去'+nn)+'要搭':'搭';
   if(m.kind==='here')o.status=spare>15?'還有 '+dur(left)+'，可以繼續逛':spare>0?'還有 '+dur(left)+'，該準備走了':'現在就要走';
   else o.status=left>0?'還有 '+dur(left):'現在';
-  if(tg.walk)o.ref='走過去約 '+tg.walk+' 分（參考）';
+  if(tg.walk)o.ref=tg.wname?tg.wname+'（參考）':'走過去約 '+tg.walk+' 分（參考）';
   if(m.pin!=null)o.ref=(o.ref?o.ref+'　':'')+'你打算 '+fmt(m.pin)+' 走';
   if(m.E&&m.E.gap&&!m.H.gap)o.ref=(o.ref?o.ref+'\n':'')+'之後去「'+m.E.gap.it.name+'」的路要現場查';
   return o}
@@ -344,6 +345,7 @@ function locTxt(m){var J=m.st.J,i=m.i;if(!J)return '';var it=J.here&&item(i,J.he
   if(J.src==='gps')t='你在'+nm(J.at);
   else if(J.src==='near')t='你離'+pname(i,J.at)+'約 '+mtxt(J.d);
   else if(J.src==='user')t=(F&&F.left&&!J.here?'剛離開'+pname(i,J.at):'你在'+nm(J.at))+'（你選的）';
+  else if(J.route)return '你在往'+pname(i,J.route.to)+'的路上';
   else if(farOff(m))return '離行程有點遠，最近的是'+pname(i,J.nearP)+'（約 '+mtxt(J.far)+'）';
   else if(J.here)t='照時間推估：你在'+nm(J.at);
   else{var nx=m.next,h0=nx&&nx.ride&&nx.ride.hops[0];
@@ -353,6 +355,7 @@ function locTxt(m){var J=m.st.J,i=m.i;if(!J)return '';var it=J.here&&item(i,J.he
 /* 人在路上（照時間推估在路上、剛按了走了、正走向某個地點）：回傳要去的地方，否則空字串 */
 function moving(m){var J=m.st.J;if(!J||J.here||farOff(m))return '';var nx=m.next,h0=nx&&nx.ride&&nx.ride.hops[0];
   if(J.src==='near')return pname(m.i,J.at);
+  if(J.route)return pname(m.i,J.route.to);
   if(J.src==='gps')return '';
   if(nx&&!(h0&&!h0.walk&&h0.from===J.at&&h0.dep>=m.now))return nx.it.name;return ''}
 function locLine(m){var t=locTxt(m);if(!t)return '';var J=m.st.J;
