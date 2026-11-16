@@ -242,8 +242,12 @@ function locate(quiet){if(!navigator.geolocation){if(!quiet){posMsg='這台不�
   navigator.geolocation.getCurrentPosition(function(p){pos={ll:[p.coords.latitude,p.coords.longitude],acc:p.coords.accuracy||999,t:Date.now()};posMsg='';geoState='granted';
       if(!(document.activeElement&&/TEXTAREA|INPUT/.test(document.activeElement.tagName)))render()},
     function(e){if(e.code===1){geoState='denied';lsSet(GEOK,'no')}if(quiet)return;posMsg=e.code===1?'定位被拒絕':'定位不到';render()},{enableHighAccuracy:true,timeout:12000,maximumAge:30000})}
-function autoLocate(){if(REH||liveIdx()<0||document.hidden||!navigator.permissions||!navigator.geolocation)return;
-  try{navigator.permissions.query({name:'geolocation'}).then(function(r){if(r.state==='granted')locate(true)},function(){})}catch(e){}}
+/* 自動抓位置：權限是 granted，或使用者在 app 裡按過「允許定位」就抓。
+   11/16 Ken 上班實驗：iPhone 主畫面 app 的 permissions.query 允許過也常回 'prompt'，只看 granted 的話打開 app 都不會抓，全部變成照時間推估 */
+function autoLocate(){if(REH||liveIdx()<0||document.hidden||!navigator.geolocation)return;
+  var ok=lsGet(GEOK)==='1';
+  if(!navigator.permissions){if(ok)locate(true);return}
+  try{navigator.permissions.query({name:'geolocation'}).then(function(r){if(r.state==='granted'||(ok&&r.state!=='denied'))locate(true)},function(){if(ok)locate(true)})}catch(e){if(ok)locate(true)}}
 function dist(a,b){var R=6371000,r=Math.PI/180,d1=(b[0]-a[0])*r,d2=(b[1]-a[1])*r,
   h=Math.sin(d1/2)*Math.sin(d1/2)+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.sin(d2/2)*Math.sin(d2/2);return 2*R*Math.asin(Math.sqrt(h))}
 function mtxt(m){return m<1000?Math.round(m/10)*10+' 公尺':(m/1000).toFixed(1)+' 公里'}
