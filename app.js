@@ -346,10 +346,10 @@ function head(m){var i=m.i,D=DAYS[i],where=farOff(m)?'下一個期限':m.st.here
    +'</header>'+pvBar(m.now)+locLine(m)}
 /* L1：app 判斷你在哪，一句話；點了可以修正 */
 function locTxt(m){var J=m.st.J,i=m.i;if(!J)return '';var it=J.here&&item(i,J.here),nm=function(p){return it&&it.place===p?it.name:pname(i,p)},F=S.fix[DK(i)],t;
-  if(J.src==='gps')t='你在'+nm(J.at);
+  if(J.route)t='你在往'+pname(i,J.route.to)+'的路上';
+  else if(J.src==='gps')t='你在'+nm(J.at);
   else if(J.src==='near')t='你離'+pname(i,J.at)+'約 '+mtxt(J.d);
   else if(J.src==='user')t=(F&&F.left&&!J.here?'剛離開'+pname(i,J.at):'你在'+nm(J.at))+'（你選的）';
-  else if(J.route)return '你在往'+pname(i,J.route.to)+'的路上';
   else if(farOff(m))return '離行程有點遠，最近的是'+pname(i,J.nearP)+'（約 '+mtxt(J.far)+'）';
   else if(J.here)t='照時間推估：你在'+nm(J.at);
   else if(J.wait)t='照時間推估：你在'+pname(i,J.at);

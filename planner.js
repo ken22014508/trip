@@ -136,8 +136,10 @@ function Planner(day){
      passed：行程順序排在現在位置前面、還沒去的項目（引擎當作去過）。照時間推估時，起點那一項（確定在那裡過）不算在內 */
 var GPS_AGE=120,GPS_ACC=1000,R_DEF=200,R_MAX=500,NEAR=1500,WALK=70,LEAVE_PAD=150,FIX_PAD=300,ROUTE=1000;
 /* 點 p 到線段 a–b 的距離（公尺，小範圍用平面近似） */
-function segDist(p,a,b){var k=Math.cos(p[0]*Math.PI/180),X=function(q){return [(q[1]-p[1])*111320*k,(q[0]-p[0])*110540]},A=X(a),B=X(b),dx=B[0]-A[0],dy=B[1]-A[1],L=dx*dx+dy*dy,t=L?Math.max(0,Math.min(1,-(A[0]*dx+A[1]*dy)/L)):0;
-  return Math.sqrt(Math.pow(A[0]+t*dx,2)+Math.pow(A[1]+t*dy,2))}
+function segDist(p,a,b){return segProj(p,a,b).d}
+/* 同上，另外回傳投影在線段上的位置 t（0＝起點、1＝終點；raw 是沒夾在 0～1 的值） */
+function segProj(p,a,b){var k=Math.cos(p[0]*Math.PI/180),X=function(q){return [(q[1]-p[1])*111320*k,(q[0]-p[0])*110540]},A=X(a),B=X(b),dx=B[0]-A[0],dy=B[1]-A[1],L=dx*dx+dy*dy,raw=L?-(A[0]*dx+A[1]*dy)/L:0,t=Math.max(0,Math.min(1,raw));
+  return {d:Math.sqrt(Math.pow(A[0]+t*dx,2)+Math.pow(A[1]+t*dy,2)),t:t,raw:raw}}
 function dist(a,b){var R=6371000,r=Math.PI/180,d1=(b[0]-a[0])*r,d2=(b[1]-a[1])*r,
   h=Math.sin(d1/2)*Math.sin(d1/2)+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.sin(d2/2)*Math.sin(d2/2);return 2*R*Math.asin(Math.sqrt(h))}
 function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},IT=D.items,done=o.done||{},drop=o.drop||{},back=o.back||{};
@@ -174,14 +176,20 @@ function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},I
     Object.keys(D.places).forEach(function(p){var d=dTo(p);if(d===Infinity)return;if(!nr||d<nr.d)nr={p:p,d:d};
       if(d<=rng(p)+(p===pv?LEAVE_PAD:0)&&(!best||d<best.d))best={p:p,d:d}});
     if(best){var a2=at(best.p);return out({at:best.p,here:a2.here,t:now,arrT:a2.here?keepArr(a2.here):null,ri:a2.ri,d:best.d,far:0},'gps')}
-    /* 3. 不在任何地點的範圍內：1.5 公里內當作正走過去 */
-    if(nr&&nr.d<=NEAR){var a3=at(nr.p);return out({at:nr.p,here:null,t:now+Math.ceil(nr.d/WALK),ri:a3.here?idx(a3.here):a3.ri,d:nr.d,far:nr.d},'near')}
-    var farD=nr?nr.d:null;
-    /* 3b. 離每個地點都遠，但在某一段車程的路線附近（例如捷運坐到一半）：算在路上，不說「離行程有點遠」。
-       路線用起訖兩站的直線近似，離直線 ROUTE 公尺（加定位誤差）以內就算 */
+    /* 3. 在某一段車程的路線附近（例如捷運坐到一半）：算在車上，往這段的終點。
+       路線用起訖兩站的直線近似，離直線 ROUTE 公尺（加定位誤差）以內。
+       離起站 1.5 公里內時（11/17 Ken 上班實驗：剛離開芝山被說成「正往芝山站」），要確定是已經上車、不是正走向起站才算：
+       投影在起站「後面」（往終點那一側），而且上次判斷在起站、或照計畫已經到發車前 15 分 */
     visits(D.startAt);var onR=null;base.rows.forEach(function(r){if(r.ride)r.ride.hops.forEach(function(h){if(h.walk||!L2[h.from]||!L2[h.to])return;
-      var d=segDist(g.ll,L2[h.from],L2[h.to]);if(d<=ROUTE+g.acc&&(!onR||d<onR.d))onR={from:h.from,to:h.to,d:d}})});
-    if(onR)farD=null}
+      var s=segProj(g.ll,L2[h.from],L2[h.to]);if(s.d<=ROUTE+g.acc&&(!onR||s.d<onR.d))onR={from:h.from,to:h.to,d:s.d,t:s.t,raw:s.raw,dep:h.dep,ride:h.arr-h.dep,ri:idx(r.it.id)}})});
+    /* 在車上：引擎從「到終點站」排起（at＝終點站、t＝現在＋剩下的車程，照在路線上的位置比例估），不會再叫你去起站搭車 */
+    function onRide(){return out({at:onR.to,here:null,t:now+Math.max(1,Math.round((1-onR.t)*onR.ride)),ri:onR.ri,d:null,far:null,route:{from:onR.from,to:onR.to}},'gps')}
+    if(onR&&nr&&nr.d<=NEAR&&onR.raw>0.02&&(pv===onR.from||now>=onR.dep-15))return onRide();
+    /* 4. 不在任何地點的範圍內：1.5 公里內當作正走過去 */
+    if(nr&&nr.d<=NEAR){var a3=at(nr.p);return out({at:nr.p,here:null,t:now+Math.ceil(nr.d/WALK),ri:a3.here?idx(a3.here):a3.ri,d:nr.d,far:nr.d},'near')}
+    /* 5. 離每個地點都遠，但在路線附近：在車上 */
+    if(onR)return onRide();
+    var farD=nr?nr.d:null}
   /* 4. 照時間推估：從上一次確定的點（沒有就是出發點、預定出門）照計畫往下走 */
   var A=(o.prev&&o.prev.anchor)||null;if(F&&(!A||F.t>=A.t))A={at:F.at,here:fh,t:F.t};
   var st={at:A?A.at:D.startAt,t:A?A.t:hm(D.start),here:A&&A.here&&open(A.here)?A.here:null,done:{},drop:{},cut:{},ext:{}},k;
@@ -203,7 +211,7 @@ function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},I
     if(pl.unknown)res={at:pp,here:null,t:pt,ri:idx(pl.unknown.it.id)};
     else if(lastR&&lastR.it.id===IT[IT.length-1].id)res={at:lastR.it.place,here:lastR.it.id,t:now,arrT:lastR.arr,ri:idx(lastR.it.id)};
     else res={at:pp,here:null,t:pt,ri:IT.length}}
-  res.far=farD!=null?farD:null;res.d=null;if(farD!=null)res.nearP=nr.p;if(onR)res.route=onR;
+  res.far=farD!=null?farD:null;res.d=null;if(farD!=null)res.nearP=nr.p;
   return out(res,'time',A)}
 /* 「還沒去 Y？」要不要問（L1，11/15 Fable 修正）：三個條件都成立才問，最多一個（照行程順序最前面的）
    1. 位置是確定的（gps／user）；照時間推估一律不問，當作照計畫去過了
