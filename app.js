@@ -456,7 +456,18 @@ function vNow(){var m=vmOf(cur),o=say(m),tg=m.tg,body=dial(o.frac,esc(o.dlab||o.
     if(ax)extra+='<div class="ref back">還沒去「'+esc(ax.name)+'」？<button class="mini" data-back="'+ab+'">加回來</button></div>'}
   if(m.kind==='here'||m.kind==='move')extra+=strip(m);
   var ask=m.wi||wdrag?'':'<button class="askbar" data-sheet="change">'+ico('chat')+'<span>計畫有變？</span>'+ico('chev')+'</button>';
-  return '<section class="stage one '+o.st+'">'+head(m)+geoAsk()+body+acts+extra+ask+'</section>'}
+  /* 注意事項（11/22 Ken）：計畫有變上面一顆按鈕，點了跳出「這裡／接下來／今天」的提醒；沒有提醒時不顯示 */
+  var tn=m.wi||wdrag?0:tipGroups(m).reduce(function(s,g){return s+g.a.length},0);
+  var tipb=tn?'<button class="askbar tipbar" data-sheet="tips">'+ico('note')+'<span>注意事項</span><i class="cnt num">'+tn+'</i>'+ico('chev')+'</button>':'';
+  return '<section class="stage one '+o.st+'">'+head(m)+geoAsk()+body+acts+extra+tipb+ask+'</section>'}
+/* 提醒：項目的 tips 和當天的 tips；每條是字串，或 {t, show}（跟著開關顯示） */
+function tipList(x){return (x&&x.tips||[]).filter(function(t){return typeof t==='string'||shown(t)}).map(function(t){return typeof t==='string'?t:t.t})}
+/* 現在用得到的提醒：人在的那一項、接下來要去的那一項、整天的 */
+function tipGroups(m){var i=m.i,D=DAYS[i],g=[],hi=m.st&&m.st.here&&item(i,m.st.here),nx=m.next&&m.next.it,a;
+  if(hi&&(a=tipList(hi)).length)g.push({h:'這裡：'+hi.name,a:a});
+  if(nx&&!(hi&&nx.id===hi.id)&&(a=tipList(nx)).length)g.push({h:'接下來：'+nx.name,a:a});
+  if((a=tipList(D)).length)g.push({h:'今天',a:a});
+  return g}
 
 /* ---------- 行程 ---------- */
 function hopsTxt(R){return R?R.hops.map(function(h){return h.walk?h.how:fmt(h.dep)+' '+h.how}).join(' → '):''}
@@ -622,6 +633,10 @@ function sheetHtml(){if(!sh)return '';var i=cur,D=DAYS[i],h='';
      +ps.map(function(p){var its=D.items.filter(function(x){return x.place===p}).map(function(x){return x.name}),on=!mv&&!farOff(mL)&&p===JL.at;
        return '<button data-locfix="'+p+'"'+(on?' aria-current="true"':'')+'><span>'+esc(pname(i,p))+'<small>'+esc(its.length?its.join('、'):'轉乘')+'</small></span>'+(on?ico('check'):ico('chev'))+'</button>'}).join('')+'</div>'
      +(F?'<div class="grid one"><button class="gb" data-locfix="">不用我選，交給 app 判斷</button></div>':'');
+    return h}
+  if(sh.t==='tips'){var G=tipGroups(vmOf(i));h='<div class="st">注意事項</div>';
+    if(!G.length)return h+'<p class="sub">現在沒有要注意的事</p>';
+    G.forEach(function(g){h+='<div class="ty tiph">'+esc(g.h)+'</div>'+g.a.map(function(t){return '<div class="rowb tip"><b>'+esc(t)+'</b></div>'}).join('')});
     return h}
   if(sh.t==='change'){var m=vmOf(i),st=m.st;
     h='<div class="st">計畫有變？</div>';
