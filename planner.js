@@ -46,26 +46,31 @@ function Planner(day){
         if(it.open&&t<hm(it.open)){r.waitOpen=hm(it.open)-t;t=hm(it.open)}
         if(it.at&&r.arr>hm(it.at))issues.push({it:it,why:'會晚 '+dur(r.arr-hm(it.at)),kind:'late'});
         if(it.close&&r.arr>hm(it.close))issues.push({it:it,why:'到的時候已經過了 '+it.close,kind:'closed'})}
-      var stay=here?0:((st.cut[it.id]||(o.cut&&o.cut[it.id]))&&it.min!=null?it.min:(it.stay||0)),lv=t+stay+(here?0:(st.ext[it.id]||0));
+      var stay=here?0:((st.cut[it.id]||(o.cut&&o.cut[it.id]))&&it.min!=null?it.min:(it.stay||0)),lv=t+stay+(here?0:(st.ext[it.id]||0)+((o.ext&&o.ext[it.id])||0));
       if(it.hold)lv=Math.max(lv,hm(it.hold));
       if(here&&o.leaveAt!=null)lv=Math.max(lv,o.leaveAt);
       r.leave=lv;t=lv;p=it.place;rows.push(r)});
     return {rows:rows,issues:issues,unknown:unknown,end:t}}
   function ok(pl){return !pl.issues.length&&!pl.unknown}
   /* 只有牆和必經會擋路。可選的去不了就自動放掉，回報放掉了誰 */
-  function hard(st,o){o=o||{};var drop={},self={},lost=[],own=[],k;for(k in (o.drop||{}))drop[k]=1;
+  /* 11/24：放掉可選的之前，先把它的停留縮到最短（min）；縮了還不夠才放掉（模擬第 7 天：晚 1 分就整個放掉道後散步） */
+  function hard(st,o){o=o||{};var drop={},self={},lost=[],own=[],cut={},short=[],k;for(k in (o.drop||{}))drop[k]=1;for(k in (o.cut||{}))cut[k]=1;
     function softsBefore(id){var out=[];for(var n=0;n<ITEMS.length&&ITEMS[n].id!==id;n++){var x=ITEMS[n];if(x.kind==='soft'&&!st.done[x.id]&&!st.drop[x.id]&&!drop[x.id]&&x.id!==st.here)out.push(x)}return out.sort(function(a,b){return (b.rank||0)-(a.rank||0)})}
-    function run(d){var oo={};for(var q in o)oo[q]=o[q];oo.drop=d;return plan(st,oo)}
-    for(var guard=0;guard<12;guard++){var pl=run(drop);
-      if(ok(pl))return {pl:pl,lost:lost};
+    var ext2={};function run(d){var oo={};for(var q in o)oo[q]=o[q];oo.drop=d;oo.cut=cut;oo.ext=ext2;return plan(st,oo)}
+    function canCut(x){return x.min!=null&&x.stay!=null&&x.min<x.stay&&!cut[x.id]&&!st.cut[x.id]}
+    for(var guard=0;guard<16;guard++){var pl=run(drop);
+      if(ok(pl)){/* 縮短的景點：只縮到剛好來得及（每次加回 5 分，加到不行為止） */
+        short.forEach(function(x){var room=(x.stay||0)-x.min;while(room>=5){ext2[x.id]=(ext2[x.id]||0)+5;if(!ok(run(drop))){ext2[x.id]-=5;break}room-=5}});
+        return {pl:run(drop),lost:lost,short:short.map(function(x){return {it:x,stay:x.min+(ext2[x.id]||0)}})}}
       var bad=pl.issues.length?pl.issues[0].it:pl.unknown.it;
       if(bad.kind==='soft'&&bad.id!==st.here){drop[bad.id]=1;self[bad.id]=1;lost.push(bad);own.push(bad);continue}
-      var c=softsBefore(bad.id);
+      var c=softsBefore(bad.id),cc=c.filter(canCut);
+      if(cc.length&&pl.issues.length){cut[cc[0].id]=1;short.push(cc[0]);continue}
       if(!c.length){/* 放掉可選的也救不了：只回報本身去不了的，其他照原計畫 */
         var d2={};for(k in (o.drop||{}))d2[k]=1;for(k in self)d2[k]=1;var p2=run(d2);
-        return {pl:p2,lost:own,fail:p2.issues.length?p2.issues[0]:null,gap:p2.issues.length?null:p2.unknown}}
+        return {pl:p2,lost:own,short:short.map(function(x){return {it:x,stay:x.min}}),fail:p2.issues.length?p2.issues[0]:null,gap:p2.issues.length?null:p2.unknown}}
       drop[c[0].id]=1;lost.push(c[0])}
-    return {pl:run(o.drop||{}),lost:own,fail:{it:ITEMS[0],why:'排不出來'}}}
+    return {pl:run(o.drop||{}),lost:own,short:short.map(function(x){return {it:x,stay:x.min}}),fail:{it:ITEMS[0],why:'排不出來'}}}
   /* 目前這站的期限：每個可選的「幾點前走才去得了」，以及牆的最後期限 */
   function limits(st){var out={soft:[],hard:null,gapAt:null},seen={},h0=hard(st);if(!st.here)return out;
     h0.lost.forEach(function(x){seen[x.id]=1});if(h0.fail||h0.gap)return out;var last=st.t;
@@ -167,7 +172,10 @@ function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},I
   function passed(ri){var out=[];for(var n=0;n<ri&&n<IT.length;n++){var id=IT[n].id;if(open(id)&&!back[id])out.push(id)}return out}
   function out(r,src,anchor){r.src=src;
     /* 還在出發點、還沒到預定出門時間：從預定出門時間開始排（不然半夜打開會排到首班車） */
-    if(r.at===D.startAt&&!r.here&&r.t<hm(D.start)&&!passed(r.ri).length)r.t=hm(D.start);r.passed=passed(r.ri).filter(function(id){return !(src==='time'&&anchor&&anchor.here===id)});delete r.ri;if(r.arrT==null)r.arrT=r.t;
+    if(r.at===D.startAt&&!r.here&&r.t<hm(D.start)&&!passed(r.ri).length)r.t=hm(D.start);
+    /* 照時間推估的起點那一項（上次定位確定在那裡）時間過了：算去過（went），不算走過（passed，不會問「還沒去」）。
+       11/24 模擬：以前只從 passed 拿掉、沒記成去過，下一站沒座標時（參道、大步危峽遊船）會排回剛離開的景點 */
+    var ps=passed(r.ri);r.went=ps.filter(function(id){return src==='time'&&anchor&&anchor.here===id});r.passed=ps.filter(function(id){return r.went.indexOf(id)<0});delete r.ri;if(r.arrT==null)r.arrT=r.t;
     r.anchor=anchor!==undefined?anchor:(src==='gps'||src==='user'?{at:r.at,here:r.here,t:r.here?r.arrT:r.t}:(o.prev&&o.prev.anchor)||null);return r}
   function keepArr(here){return o.prev&&o.prev.here===here&&o.prev.arrT!=null?o.prev.arrT:now}
   /* 1. 使用者的修正：有定位時離修正的地點超出範圍再多 300 公尺就失效；沒有定位時維持到那一項預定的停留時間結束 */
@@ -177,8 +185,10 @@ function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},I
     if(ok){var a1=at(F.at);return out({at:F.at,here:fh,t:fh||g?now:F.t,arrT:fh?F.t:null,ri:fh?idx(fh):a1.ri,d:g&&L2[F.at]?dTo(F.at):null},'user')}}
   if(g){/* 2. 在某個地點的範圍內（多個取最近）。已經判斷在 A：離開 A 要超出範圍再多 150 公尺 */
     var pv=o.prev&&(o.prev.src==='gps'||o.prev.src==='user')?o.prev.at:null,best=null,nr=null;
+    /* 離開的緩衝（多 150 公尺）只給「這裡還有沒做完的項目」的地點：出發的飯店、車站不用撐著，不然走出 255 公尺還當你在飯店、算你趕不上車（11/24 模擬第 2 天） */
     Object.keys(D.places).forEach(function(p){var d=dTo(p);if(d===Infinity)return;if(!nr||d<nr.d)nr={p:p,d:d};
-      if(d<=rng(p)+(p===pv?LEAVE_PAD:0)&&(!best||d<best.d))best={p:p,d:d}});
+      var pad=p===pv&&o.prev&&o.prev.here&&open(o.prev.here)?LEAVE_PAD:0;
+      if(d<=rng(p)+pad&&(!best||d<best.d))best={p:p,d:d}});
     if(best){var a2=at(best.p);return out({at:best.p,here:a2.here,t:now,arrT:a2.here?keepArr(a2.here):null,ri:a2.ri,d:best.d,far:0},'gps')}
     /* 3. 在某一段車程的路線附近（例如捷運坐到一半）：算在車上，往這段的終點。
        路線用起訖兩站的直線近似，離直線 ROUTE 公尺（加定位誤差）以內。
@@ -191,7 +201,8 @@ function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},I
       var score=(pr?(pr.from===h.from&&pr.to===h.to?0:pr.from===h.to&&pr.to===h.from?2000:1000):pv===h.from?0:pv===h.to?2000:1000)+tdist;
       if(!onR||score<onR.score||(score===onR.score&&s.d<onR.d))onR={from:h.from,to:h.to,d:s.d,t:s.t,raw:s.raw,dep:h.dep,arr:h.arr,ride:h.arr-h.dep,ri:idx(r.it.id),score:score}})});
     /* 在車上：引擎從「到終點站」排起（at＝終點站、t＝現在＋剩下的車程，照在路線上的位置比例估），不會再叫你去起站搭車 */
-    function onRide(){return out({at:onR.to,here:null,t:now+Math.max(1,Math.round((1-onR.t)*onR.ride)),ri:onR.ri,d:null,far:null,route:{from:onR.from,to:onR.to}},'gps')}
+    /* 照班次搭的車、現在在那班車的時間內：用那班車的到站時間（11/24 模擬：用比例估多了 1 分，害寒霞溪之後的纜車趕不上） */
+    function onRide(){var ta=now>=onR.dep&&now<=onR.arr?onR.arr:now+Math.max(1,Math.round((1-onR.t)*onR.ride));return out({at:onR.to,here:null,t:ta,ri:onR.ri,d:null,far:null,route:{from:onR.from,to:onR.to}},'gps')}
     if(onR&&nr&&nr.d<=NEAR&&onR.raw>0.02&&(pv===onR.from||(o.prev&&o.prev.route)||(now>=onR.dep-15&&now<=onR.arr+5)))return onRide();
     /* 4. 不在任何地點的範圍內：1.5 公里內當作正走過去。
        只認照計畫現在可能在、或接下來要去的地點（11/23 實測：搭計程車離開山六醬油，被說成「離草壁港 1.2 公里、往山六醬油」）；
@@ -226,7 +237,8 @@ function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},I
     if(pl.unknown)res={at:pp,here:null,t:pt,ri:idx(pl.unknown.it.id)};
     else if(lastR&&lastR.it.id===IT[IT.length-1].id)res={at:lastR.it.place,here:lastR.it.id,t:now,arrT:lastR.arr,ri:idx(lastR.it.id)};
     else res={at:pp,here:null,t:pt,ri:IT.length}}
-  var nearP={};nearP[res.at]=1;for(var q=Math.max(0,n-1);q<=n&&q<pl.rows.length;q++){var rq=pl.rows[q];nearP[rq.it.place]=1;if(rq.ride)rq.ride.hops.forEach(function(h){nearP[h.from]=1;nearP[h.to]=1})}
+  /* 照計畫現在可能在、或接下來要去的地點：所在地點、下一兩段的地點，加上所在地點直接有路段能到的地方（晚出門、後面排不出來時也還知道「出了門會往港口走」） */
+  var nearP={};nearP[res.at]=1;Object.keys(D.legs||{}).forEach(function(k){var ab=k.split('>');if(ab[0]===res.at)nearP[ab[1]]=1});for(var q=Math.max(0,n-1);q<=n&&q<pl.rows.length;q++){var rq=pl.rows[q];nearP[rq.it.place]=1;if(rq.ride)rq.ride.hops.forEach(function(h){nearP[h.from]=1;nearP[h.to]=1})}
   return {res:res,A:A,near:nearP}}
   var TE=timeEst(),res=TE.res,A=TE.A;
   res.far=farD!=null?farD:null;res.d=null;if(farD!=null)res.nearP=nr.p;

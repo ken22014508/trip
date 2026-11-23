@@ -118,7 +118,7 @@ function transitUrl(i,p){return navTo(i,p)+'&travelmode=transit'}
    L1：在哪不再靠「到了」，改用定位＋時間判斷（TripPlanner.judge）；判斷是走過的（passed）引擎當作去過，不排回來 */
 function mkState(i){var D=DAYS[i],now=nowMin(i),J=judgeNow(i),st={at:J.at,t:J.t,here:J.here,arrT:J.arrT!=null?J.arrT:now,done:{},drop:{},cut:{},ext:{},pick:{},J:J};
   D.items.forEach(function(x){var k=K(i,x.id);if(S.done[k]!=null)st.done[x.id]=1;if(S.drop[k])st.drop[x.id]=1;if(S.cut[k])st.cut[x.id]=1;if(S.ext[k])st.ext[x.id]=S.ext[k]});
-  J.passed.forEach(function(id){st.done[id]=1});
+  J.passed.concat(J.went||[]).forEach(function(id){st.done[id]=1});
   if(st.here&&(st.done[st.here]||st.drop[st.here]))st.here=null;
   st.order=passedOrder(i,st);
   return st}
@@ -421,7 +421,10 @@ function fixOpts(m){var i=m.i,h='';
       +askBtn('我要從'+pname(i,g.from)+'去'+pname(i,g.it.place)+'，請查現在最近的班次和走法。',[g.from,g.it.place],'問 Claude 查班次')
       +'<a class="opt ghost" href="'+transitUrl(i,g.it.place)+'" target="_blank" rel="noopener">用 Google Maps 查路線</a>'}
   return h?'<div class="opts">'+h+'</div>':''}
-function lostLine(m){return m.lost.length&&!m.wi?'<div class="ref lost">'+ico('skip')+'去不了了：'+esc(names(m.lost))+'</div>':''}
+function lostLine(m){var sh=!m.wi&&m.H&&m.H.short?m.H.short.filter(function(x){return m.lost.indexOf(x.it)<0}):[];
+  return (m.lost.length&&!m.wi?'<div class="ref lost">'+ico('skip')+'去不了了：'+esc(names(m.lost))+'</div>':'')
+    /* 11/24：時間不夠時先縮短可選景點的停留，告訴使用者縮成幾分 */
+    +(sh.length?'<div class="ref lost">時間緊：'+sh.map(function(x){return '「'+esc(x.it.name)+'」只待 '+x.stay+' 分'}).join('、')+'</div>':'')}
 /* 定位現在能用（新、準，planner 也採用了）：離開會自動記，不需要「走了」 */
 function liveLoc(m){var J=m.st&&m.st.J,g=J&&J.gps;return !!(g&&g.age<=120&&g.acc<=1000)}
 /* 主按鈕：「走了」只在拿不到定位時出現（11/15 Ken：沒必要的藏起來，需要時再出現）。有定位時離開會自動記。
