@@ -136,7 +136,7 @@ function track(i){var did=DK(i),J=judgeNow(i),P0=S.loc[did],g=J.gps,now=nowMin(i
   if(!(isLive(i)||(g&&g.fake)))return J;
   if(P0&&P0.here&&(P0.src==='gps'||P0.src==='user')&&J.here!==P0.here&&g&&J.src!=='user'){var k=K(i,P0.here);if(S.done[k]==null&&!S.drop[k]){S.done[k]=now>1?now:2;ch=true}}
   if(S.fix[did]&&J.src!=='user'){delete S.fix[did];ch=true}
-  var keep={at:J.at,here:J.here,t:J.t,arrT:J.arrT,src:J.src,far:J.far,anchor:J.anchor};
+  var keep={at:J.at,here:J.here,t:J.t,arrT:J.arrT,src:J.src,far:J.far,anchor:J.anchor};if(J.route)keep.route=J.route;
   if(JSON.stringify(keep)!==JSON.stringify(P0||null)){S.loc[did]=keep;ch=true}
   if(ch){save();J=judgeNow(i)}
   return J}
@@ -212,7 +212,7 @@ function say(m){var i=m.i,now=m.now,tg=m.tg,o={st:'go'};
   var left=tg.time-now,spare=left-(tg.walk||0);o.big=fmt(tg.time);o.frac=left/120;o.st=spare<10?'tight':'go';o.dstat='還有 '+rem(left);
   var d0=m.kind==='here'&&m.pin==null&&!m.wi?m.dl:null;
   o.lab=tg.arrive?tg.what+' 前要到':(d0&&d0.soft?'想去'+d0.soft.name+'，':'')+'在'+tg.where+'搭'+tg.what;
-  var nn=m.next&&m.next.it.name.slice(0,5);o.dlab=tg.arrive?'幾點前到':d0&&d0.soft?'去'+d0.soft.name.slice(0,4)+'要搭':d0?'最晚搭':nn?(/^回/.test(nn)?nn:'去'+nn)+'要搭':'搭';
+  var nn=m.next&&m.next.it.name.replace(/（[^）]*）|\([^)]*\)/g,'').slice(0,5);o.dlab=tg.arrive?'幾點前到':d0&&d0.soft?'去'+d0.soft.name.slice(0,4)+'要搭':d0?'最晚搭':nn?(/^回/.test(nn)?nn:'去'+nn)+'要搭':'搭';
   if(m.kind==='here')o.status=spare>15?'還有 '+dur(left)+'，可以繼續逛':spare>0?'還有 '+dur(left)+'，該準備走了':'現在就要走';
   else o.status=left>0?'還有 '+dur(left):'現在';
   if(tg.walk)o.ref=tg.wname?tg.wname+'（參考）':'走過去約 '+tg.walk+' 分（參考）';
@@ -438,10 +438,13 @@ function nextDue(m){var rows=m.pl?m.pl.rows.slice(m.st.here?1:0):[];
   return null}
 function vNow(){var m=vmOf(cur),o=say(m),tg=m.tg,body=dial(o.frac,esc(o.dlab||o.lab),bigOf(o),esc(o.dstat||o.status)),how='',J=m.st.J,i=m.i;
   var due=!m.wi&&!wdrag&&J&&(J.src==='time'||(J.far!=null&&J.far>1500))&&(m.kind==='here'||m.kind==='move')?nextDue(m):null;
-  if(due){var lf=due.t-m.now;o.st=lf<10?'tight':'go';o.ref='';
-    body=dial(Math.max(.04,lf/120),esc(due.ride?'最晚到'+pname(i,due.place).slice(0,6)+'搭':'幾點前要到'),roll(fmt(due.t)),esc('還有 '+rem(lf)))
-      +'<div class="ref due">最晚 '+fmt(due.t)+' 要到'+esc(due.ride?pname(i,due.place)+'搭'+due.what:due.what)+'</div>'
-      +'<a class="bind" href="'+navTo(i,due.place)+'" target="_blank" rel="noopener">'+ico('nav')+'用 Google Maps 去'+esc(pname(i,due.place))+ico('chev')+'</a>'}
+  /* 人就在期限的那個地點（在景點，或在車站等車）：不叫你導航去自己在的地方 */
+  if(due){var lf=due.t-m.now,atDue=due.place===J.at&&(m.st.here||!moving(m));o.st=lf<10?'tight':'go';o.ref='';
+    body=dial(Math.max(.04,lf/120),esc(due.ride?(atDue?'最晚搭':'最晚到'+pname(i,due.place).slice(0,6)+'搭'):'幾點前要到'),roll(fmt(due.t)),esc('還有 '+rem(lf)))
+      /* 期限就在現在這個地點（例如在山六醬油等預約的計程車）：不叫你導航去自己在的地方 */
+      +(atDue?'<div class="ref due">最晚 '+fmt(due.t)+' 在這裡搭'+esc(due.what)+'</div>'
+       :'<div class="ref due">最晚 '+fmt(due.t)+' 要到'+esc(due.ride?pname(i,due.place)+'搭'+due.what:due.what)+'</div>'
+       +'<a class="bind" href="'+navTo(i,due.place)+'" target="_blank" rel="noopener">'+ico('nav')+'用 Google Maps 去'+esc(pname(i,due.place))+ico('chev')+'</a>')}
   else if(m.kind==='conf'||m.kind==='gap')body='<div class="alert"><span class="lab">'+esc(o.lab)+'</span><b>'+esc(o.big)+'</b><span class="why">'+esc(o.status)+'</span>'+(m.lost.length?'<span class="why">去不了了：'+esc(names(m.lost))+'</span>':'')+'</div>'+fixOpts(m);
   else if(!m.wi&&m.next&&m.next.ride&&m.next.arr>m.now){
     /* 「怎麼去」就是圓環下面這一條：寫著要在哪裡搭什麼，點了看每一段和導航 */
@@ -646,6 +649,8 @@ function sheetHtml(){if(!sh)return '';var i=cur,D=DAYS[i],h='';
       if(S.drop[k]){h+='<div class="rowb"><b class="off">'+esc(it.name)+'</b><button class="mini" data-chg="undrop" data-id="'+it.id+'">加回來</button></div>';return}
       h+='<div class="rowb"><b>'+esc(it.name)+'</b><button class="mini" data-chg="goto" data-id="'+it.id+'">直接去</button>'+(it.kind==='wall'&&it.id==='home'?'':'<button class="mini" data-chg="drop" data-id="'+it.id+'">不去了</button>')+'</div>'});
     return h+'<button class="rowb" data-sheet="askq"><b>問 Claude</b><span>其他狀況：打一句話，連同現在的行程一起問</span></button>'}
+  /* 行程分頁點景點 →「不去了」：跟計畫有變一樣先顯示影響、按「就這樣」才生效（11/23 之前這裡按了沒反應） */
+  if(sh.t==='stop'&&chg){return '<div class="st">'+esc((item(i,sh.id)||{}).name||'')+'</div><p class="res">'+esc(chg.txt).replace(/\n/g,'<br>')+'</p><div class="grid"><button class="gb" data-chg="back">'+ico('undo')+'返回</button>'+(chg.apply?'<button class="gb pri" data-chg="go">'+ico('check')+'就這樣</button>':'')+'</div>'}
   if(sh.t==='stop'){var it=item(i,sh.id);if(!it)return '';var k=K(i,it.id),dn=S.done[k]!=null,dr=!!S.drop[k],stay=(S.cut[k]&&it.min!=null?it.min:(it.stay||0))+(S.ext[k]||0);
     h='<div class="ty">'+kindTxt(it)+'</div><div class="st">'+esc(it.name)+'</div>'+(it.at?'<div class="lt">'+it.at+' 前要到'+(it.cons?'（'+esc(it.cons)+'）':'')+'</div>':'')+(it.fallback?'<p class="sub">備案：'+esc(it.fallback)+'</p>':'');
     if(!dn&&!dr&&it.stay)h+='<div class="stepper"><span>預計停留（參考）</span><button class="ib" data-ext="'+it.id+'" data-v="-15" aria-label="少 15 分"'+(stay<=(it.min||0)?' disabled':'')+'>−</button><b class="num">'+stay+' 分</b><button class="ib" data-ext="'+it.id+'" data-v="15" aria-label="多 15 分">+</button></div>';

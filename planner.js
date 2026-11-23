@@ -21,9 +21,13 @@ function Planner(day){
     for(var i=0;i<L.runs.length;i++){var d=hm(L.runs[i][0]);if(d>=t)return {dep:d,arr:hm(L.runs[i][1]),how:L.runs[i][2],wait:d-t,last:i===L.runs.length-1&&!L.partial,est:!!L.est,fixed:!!L.fixed}}
     return null}
   /* 兩地之間最早到的走法（可以經過別的地方轉）。班表不完整或沒有路段時回 unknown，不猜 */
-  function route(a,b,t){var best={},prev={},Q=[a],gap=null;best[a]=t;
+  /* 不看時間，每個地點到 b 最少要幾段（說明「為什麼到不了」時，用最靠近 b 的那段斷掉的路來講） */
+  function hopsTo(b){var D={},Q=[b];D[b]=0;while(Q.length){var v=Q.shift();Object.keys(EDGES).forEach(function(u){EDGES[u].forEach(function(e){if(e.to===v&&D[u]==null){D[u]=D[v]+1;Q.push(u)}})})}return D}
+  function route(a,b,t){var best={},prev={},Q=[a],gap=null,gd=1e9,HB=hopsTo(b);best[a]=t;
     while(Q.length){Q.sort(function(x,y){return best[x]-best[y]});var u=Q.shift();if(u===b)break;
-      (EDGES[u]||[]).forEach(function(e){var h=hop(e.L,best[u]);if(!h){if(e.L.partial)gap=gap||{partial:1,name:e.L.name};else if(e.L.complete||e.L.freq)gap=gap||{none:1,name:e.L.name,fixed:e.L.fixed};else gap=gap||{partial:0,name:e.L.name,missed:e.L.fixed?e.L.name:null};return}
+      (EDGES[u]||[]).forEach(function(e){var h=hop(e.L,best[u]);if(!h){var dd=HB[e.to]!=null?HB[e.to]:1e8;if(dd>=gd)return;gd=dd;
+          /* 11/23：從土庄港回不了高松時，原本用第一個碰到的斷路（往草壁的巴士）說「沒有完整班次資料」；改用最靠近目的地的那段（渡輪：今天沒有了） */
+          if(e.L.partial)gap={partial:1,name:e.L.name};else if(e.L.complete||e.L.freq)gap={none:1,name:e.L.name,fixed:e.L.fixed};else gap={partial:0,name:e.L.name,missed:e.L.fixed?e.L.name:null};return}
         if(best[e.to]==null||h.arr<best[e.to]){best[e.to]=h.arr;h.from=u;h.to=e.to;prev[e.to]=h;if(Q.indexOf(e.to)<0)Q.push(e.to)}})}
     if(best[b]==null)return gap&&gap.none?{none:1,name:gap.name,fixed:gap.fixed}:{unknown:1,partial:!!(gap&&gap.partial),missed:gap&&gap.missed};
     var hops=[],x=b;while(x!==a){hops.unshift(prev[x]);x=prev[x].from}
@@ -180,17 +184,28 @@ function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},I
        路線用起訖兩站的直線近似，離直線 ROUTE 公尺（加定位誤差）以內。
        離起站 1.5 公里內時（11/17 Ken 上班實驗：剛離開芝山被說成「正往芝山站」），要確定是已經上車、不是正走向起站才算：
        投影在起站「後面」（往終點那一側），而且上次判斷在起站、或照計畫已經到發車前 15 分 */
+    /* 去程、回程常是同一條線（渡輪、纜車）：離線段一樣近，所以先看「上次判斷在哪一端」，再看照計畫現在最可能在搭哪一段（11/23 實測：去小豆島的船上被說成「往回高松」） */
     visits(D.startAt);var onR=null;base.rows.forEach(function(r){if(r.ride)r.ride.hops.forEach(function(h){if(h.walk||!L2[h.from]||!L2[h.to])return;
-      var s=segProj(g.ll,L2[h.from],L2[h.to]);if(s.d<=ROUTE+g.acc&&(!onR||s.d<onR.d))onR={from:h.from,to:h.to,d:s.d,t:s.t,raw:s.raw,dep:h.dep,ride:h.arr-h.dep,ri:idx(r.it.id)}})});
+      var s=segProj(g.ll,L2[h.from],L2[h.to]);if(s.d>ROUTE+g.acc)return;
+      var pr=o.prev&&o.prev.route,tdist=now<h.dep-15?h.dep-15-now:now>h.arr+15?now-h.arr-15:0;
+      var score=(pr?(pr.from===h.from&&pr.to===h.to?0:pr.from===h.to&&pr.to===h.from?2000:1000):pv===h.from?0:pv===h.to?2000:1000)+tdist;
+      if(!onR||score<onR.score||(score===onR.score&&s.d<onR.d))onR={from:h.from,to:h.to,d:s.d,t:s.t,raw:s.raw,dep:h.dep,arr:h.arr,ride:h.arr-h.dep,ri:idx(r.it.id),score:score}})});
     /* 在車上：引擎從「到終點站」排起（at＝終點站、t＝現在＋剩下的車程，照在路線上的位置比例估），不會再叫你去起站搭車 */
     function onRide(){return out({at:onR.to,here:null,t:now+Math.max(1,Math.round((1-onR.t)*onR.ride)),ri:onR.ri,d:null,far:null,route:{from:onR.from,to:onR.to}},'gps')}
-    if(onR&&nr&&nr.d<=NEAR&&onR.raw>0.02&&(pv===onR.from||now>=onR.dep-15))return onRide();
-    /* 4. 不在任何地點的範圍內：1.5 公里內當作正走過去 */
-    if(nr&&nr.d<=NEAR){var a3=at(nr.p);return out({at:nr.p,here:null,t:now+Math.ceil(nr.d/WALK),ri:a3.here?idx(a3.here):a3.ri,d:nr.d,far:nr.d},'near')}
+    if(onR&&nr&&nr.d<=NEAR&&onR.raw>0.02&&(pv===onR.from||(o.prev&&o.prev.route)||(now>=onR.dep-15&&now<=onR.arr+5)))return onRide();
+    /* 4. 不在任何地點的範圍內：1.5 公里內當作正走過去。
+       只認照計畫現在可能在、或接下來要去的地點（11/23 實測：搭計程車離開山六醬油，被說成「離草壁港 1.2 公里、往山六醬油」）；
+       剛離開的地點和接下來要去的都在 1.5 公里內時，選要去的那個（從土庄港走去天使之路，不要說「離土庄港 1 公里」） */
+    if(nr&&nr.d<=NEAR){var TN=timeEst().near,cands=Object.keys(D.places).filter(function(p){return TN[p]&&dTo(p)<=NEAR}).sort(function(a,b){return dTo(a)-dTo(b)});
+      /* 剛離開的地點：上次是定位／修正就是那裡；上次已經是「正走向某處」就用它的起點（anchor）。上次正走向的地點還在候選裡就維持，不要來回跳 */
+      var leftP=pv||(o.prev&&o.prev.anchor&&o.prev.anchor.at),keepP=o.prev&&o.prev.src==='near'&&cands.indexOf(o.prev.at)>=0?o.prev.at:null;
+      var np=keepP||(cands.length>1&&cands[0]===leftP?cands[1]:cands[0]);
+      if(np){var a3=at(np),dn=dTo(np);return out({at:np,here:null,t:now+Math.ceil(dn/WALK),ri:a3.here?idx(a3.here):a3.ri,d:dn,far:dn},'near')}}
     /* 5. 離每個地點都遠，但在路線附近：在車上 */
     if(onR)return onRide();
     var farD=nr?nr.d:null}
-  /* 4. 照時間推估：從上一次確定的點（沒有就是出發點、預定出門）照計畫往下走 */
+  /* 照時間推估：從上一次確定的點（沒有就是出發點、預定出門）照計畫往下走。回傳 {res, A, near:[照計畫現在可能在、或接下來要去的地點]} */
+  function timeEst(){
   var A=(o.prev&&o.prev.anchor)||null;if(F&&(!A||F.t>=A.t))A={at:F.at,here:fh,t:F.t};
   var st={at:A?A.at:D.startAt,t:A?A.t:hm(D.start),here:A&&A.here&&open(A.here)?A.here:null,done:{},drop:{},cut:{},ext:{}},k;
   for(k in done)st.done[k]=1;for(k in drop)st.drop[k]=1;
@@ -211,6 +226,9 @@ function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},I
     if(pl.unknown)res={at:pp,here:null,t:pt,ri:idx(pl.unknown.it.id)};
     else if(lastR&&lastR.it.id===IT[IT.length-1].id)res={at:lastR.it.place,here:lastR.it.id,t:now,arrT:lastR.arr,ri:idx(lastR.it.id)};
     else res={at:pp,here:null,t:pt,ri:IT.length}}
+  var nearP={};nearP[res.at]=1;for(var q=Math.max(0,n-1);q<=n&&q<pl.rows.length;q++){var rq=pl.rows[q];nearP[rq.it.place]=1;if(rq.ride)rq.ride.hops.forEach(function(h){nearP[h.from]=1;nearP[h.to]=1})}
+  return {res:res,A:A,near:nearP}}
+  var TE=timeEst(),res=TE.res,A=TE.A;
   res.far=farD!=null?farD:null;res.d=null;if(farD!=null)res.nearP=nr.p;
   return out(res,'time',A)}
 /* 「還沒去 Y？」要不要問（L1，11/15 Fable 修正）：三個條件都成立才問，最多一個（照行程順序最前面的）
