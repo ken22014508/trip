@@ -167,6 +167,7 @@ function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},I
   function rng(p){return Math.min((RAD[p]||R_DEF)+(g?g.acc:0),R_MAX)}
   function dTo(p){return g&&L2[p]?dist(g.ll,L2[p]):Infinity}
   function open(id){return !done[id]&&!drop[id]}
+  /* 這個地方有項目、而且都做完了（或不去了） */
   function idx(id){for(var n=0;n<IT.length;n++)if(IT[n].id===id)return n;return -1}
   function item(id){return IT[idx(id)]}
   function stayEnd(id,t){var it=item(id);if(!it)return t;var e=t+(it.stay||0);if(it.hold)e=Math.max(e,hm(it.hold));return e}
@@ -183,7 +184,11 @@ function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},I
        選計畫上「待在那裡的時間」最接近現在的那一項，不是永遠第一項（11/28 模擬：整天沒開 app、下午才第一次打開） */
     var hc=c[0].id,bd=1e9;base.rows.forEach(function(r){if(r.it.place!==p||!open(r.it.id))return;var d=now<r.arr?r.arr-now:now>r.leave?now-r.leave:0;if(d<bd){bd=d;hc=r.it.id}});
     /* 最接近的是「從這裡出門」：還沒出門，除非這一項就排在出門那時候（例如出發的飯店第一件事就是退房） */
-    if(near&&near.start){var r0=base.rows.filter(function(r){return r.it.id===hc})[0];if(!(r0&&r0.arr<=hm(D.start)+5))return {here:null,ri:near.ri}}
+    var r0=base.rows.filter(function(r){return r.it.id===hc})[0];
+    if(near&&near.start){if(!(r0&&r0.arr<=hm(D.start)+5))return {here:null,ri:near.ri}}
+    /* 最接近的是「從這裡搭車離開」或「在這裡轉車」（不是為了這裡的項目來的）：在等車，不是在這裡的項目，除非那一項就排在這時候前後。
+       11/28 示範資料：出發點就是高松港、9:00 開船，8:50 在港口被當成在最後一站「回高松」（整天走完了），離開港口時又把它記成去過 */
+    else if(near&&!near.item){if(!(r0&&near.t>=r0.arr-5&&near.t<=r0.leave+5))return {here:null,ri:near.ri}}
     return {here:hc,ri:idx(hc)}}
   function passed(ri){var out=[];for(var n=0;n<ri&&n<IT.length;n++){var id=IT[n].id;if(open(id)&&!back[id])out.push(id)}return out}
   function out(r,src,anchor){r.src=src;
@@ -205,6 +210,9 @@ function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},I
     Object.keys(D.places).forEach(function(p){var d=dTo(p);if(d===Infinity)return;if(!nr||d<nr.d)nr={p:p,d:d};
       var pad=p===pv&&o.prev&&o.prev.here&&open(o.prev.here)?LEAVE_PAD:0;
       if(d<=rng(p)+pad&&(!best||d<best.d))best={p:p,d:d}});
+    /* 11/28 試過「路過已經去完的地方不算在那裡」（第 6 天臥龍山莊走去大洲城會經過おはなはん通り）：
+       一律不算、只在兩站連線上才不算都試了，別天都亂掉——路過時被記成去過的地方，真的到了反而不認。
+       「去過」的紀錄不夠可靠，這條規則先不做；第 6 天改用資料補おはなはん通り→大洲城直接走的路段 */
     if(best){var a2=at(best.p);return out({at:best.p,here:a2.here,t:now,arrT:a2.here?keepArr(a2.here):null,ri:a2.ri,d:best.d,far:0},'gps')}
     /* 3. 在某一段車程的路線附近（例如捷運坐到一半）：算在車上，往這段的終點。
        路線用起訖兩站的直線近似，離直線 ROUTE 公尺（加定位誤差）以內。

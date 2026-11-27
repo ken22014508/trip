@@ -130,11 +130,15 @@ function judgeNow(i){var did=DK(i),D=DAYS[i],now=nowMin(i),g=gpsFor(i),done={},d
   if(JC[i]&&JC[i].key===key)return JC[i].J;
   var J=TripPlanner.judge(D,{P:PL[i],now:now,gps:g,fix:S.fix[did]||null,prev:S.loc[did]||null,done:done,drop:drop,back:back});J.gps=g;
   JC[i]={key:key,J:J};return J}
+/* 離開時自動記成去過，但離原訂到那一項還超過一小時的不記：那是路過，不是去過。
+   11/28 模擬：第 4 天從飯店走去高知城經過弘人市場，會被當成在 16:13 的晚餐、走開就記成去過，晚上就不再排；
+   v70 第 6 天 13:36 離開伊予大洲站，也把 16:35 的伊予灘物語記成去過（判斷已修，這裡再擋一層）。被擋下的路過，畫面上那幾分鐘可能還寫「在 X」 */
+function passBy(i,id,now){var b=PL[i].plan({at:DAYS[i].startAt,t:hm(DAYS[i].start),here:null,done:{},drop:{},cut:{},ext:{}}),r=b.rows.filter(function(x){return x.it.id===id})[0];return !!r&&r.arr-now>60}
 /* 把這次的判斷記下來（下次的「上次判斷」）。定位看到你離開了上一個地點 → 自動算「走了」，時間是 app 看到的時間。
    只在旅行當天、或開著假定位時記，示範其他天時不動 */
 function track(i){var did=DK(i),J=judgeNow(i),P0=S.loc[did],g=J.gps,now=nowMin(i),ch=false;
   if(!(isLive(i)||(g&&g.fake)))return J;
-  if(P0&&P0.here&&(P0.src==='gps'||P0.src==='user')&&J.here!==P0.here&&g&&J.src!=='user'){var k=K(i,P0.here);if(S.done[k]==null&&!S.drop[k]){S.done[k]=now>1?now:2;ch=true}}
+  if(P0&&P0.here&&(P0.src==='gps'||P0.src==='user')&&J.here!==P0.here&&g&&J.src!=='user'){var k=K(i,P0.here);if(S.done[k]==null&&!S.drop[k]&&!passBy(i,P0.here,now)){S.done[k]=now>1?now:2;ch=true}}
   if(S.fix[did]&&J.src!=='user'){delete S.fix[did];ch=true}
   var keep={at:J.at,here:J.here,t:J.t,arrT:J.arrT,src:J.src,far:J.far,anchor:J.anchor};if(J.route)keep.route=J.route;
   if(JSON.stringify(keep)!==JSON.stringify(P0||null)){S.loc[did]=keep;ch=true}
@@ -807,23 +811,24 @@ function skyRender(){var glass=S.theme==='glass'&&!!window.Sky;document.body.cla
   if(glass){var D=DAYS[cur];Sky.set({scape:D.scape,lat:D.ll[0],lng:D.ll[1],at:skyAt(cur,t0),wx:skyWx(cur,t0)});Sky.on(true);Sky.poke()}
   else{if(window.Sky)Sky.on(false);sky(t0)}}
 var planAnim=true,lastTab='',arrFx=null,waveEnd=null,lastJK=null;
-/* D3「到了／走了」：水滴落在手指按的地方（lastPt），從那裡用兩圈換頁（見下面 waveFx）。
-   換畫面前把 #app 複製一份疊在上面當舊頁；波速＝畫面高 × 0.62／秒（跟 sky.js 第一圈一樣）。減少動態效果時直接換。
+/* D3「到了／走了」：水滴落在手指按的地方（lastPt），從那裡用一圈水波換頁（見下面 waveFx）。
+   換畫面前把 #app 複製一份疊在上面當舊頁；波速＝畫面高 × 0.62／秒（跟 sky.js 的水波一樣）。減少動態效果時直接換。
+   水滴在換頁真的開始時才落下（render 裡），不是按下去那一刻：按「走了」轉盤先閃 260ms 才換內容，水波先跑的話一換就整塊跳出新頁。
    同一時間只有一個轉場：新的開始前先把上一個收尾（waveEnd）。 */
 var lastPt=null;document.addEventListener('pointerdown',function(e){lastPt={x:e.clientX,y:e.clientY,t:Date.now()}},true);
 function dropFx(btn){var br=btn.getBoundingClientRect(),p=lastPt&&Date.now()-lastPt.t<1500?lastPt:{x:br.left+br.width/2,y:br.top+br.height/2};
-  if(window.Sky&&Sky.drop)Sky.drop(p.x,p.y);if(calm)return;arrFx={x:p.x,y:p.y,t0:performance.now(),v:Math.max(300,innerHeight*.62)}}
+  if(calm)return;arrFx={x:p.x,y:p.y,t0:performance.now(),v:Math.max(300,innerHeight*.62)}}
 function mkOld(){var o=app.cloneNode(true);o.classList.add('xold');o.setAttribute('aria-hidden','true');
   o.querySelectorAll('[id]').forEach(function(e){e.removeAttribute('id')});o.querySelectorAll('.burst').forEach(function(e){e.classList.remove('burst')});
   app.parentNode.insertBefore(o,app.nextSibling);o.scrollTop=app.scrollTop;document.body.classList.add('xfade');return o}
-/* 換頁（11/28 改）：水波第一圈只折射舊頁；第二圈（晚 WAVE_GAP 秒，sky.js 同一個數）經過的地方換成新頁，R＝第二圈的半徑。
+/* 換頁（11/28 改）：只有一圈水波，R＝那一圈的半徑；圈外是舊頁、圈內已經是新頁。
    玻璃在 R 直接換成新頁的（一直都有玻璃，被那一圈的折射蓋住）；字在 R±WAVE_E 交叉淡入淡出。
    WAVE_G＞0 會讓字在 R±G 那一窄條先消失（新舊不疊在一起），試過：兩頁一樣的字（轉盤的 12:30、標題）會被那一圈擦掉一下，所以用 0。
-   以前（D3）兩圈中間留一大圈空帶，沒有玻璃也沒有字，只有天空；11/28 Ken：「兩圈的中間是糊的」（白天多雲時整圈白白一片）。
-   換在第二圈不換在第一圈：按「走了」時轉盤先閃 260ms 才換內容，換在第一圈會一開始就整塊跳出新頁。
+   演變：D3 兩圈中間留一大圈空帶（沒有玻璃也沒有字，只有天空）→ 11/28 Ken「兩圈的中間是糊的」→ 第一圈只折射、第二圈換頁（v70）
+   → 11/28 Ken「一個漣漪就夠了」→ 一圈，水滴改在換頁開始時落下（見上面 dropFx）。
    舊頁複本：R+G 外看得到；新頁 #app：R−G 內看得到。sky.js 用 Sky.wave(x,y,R,G)。 */
-var WAVE_GAP=.32,WAVE_G=0,WAVE_E=10,BOB_W=60,BOB_A=6,BOB_B=.04;
-/* 轉場效果（「更多 → 點版號」的檢查畫面切換）：cut＝只有兩圈；bob＝甲案，字被波抬起來；gl＝乙案（預設），轉盤的字畫進 WebGL、其他照甲案 */
+var WAVE_G=0,WAVE_E=10,BOB_W=60,BOB_A=6,BOB_B=.04;
+/* 轉場效果（「更多 → 點版號」的檢查畫面切換）：cut＝只有水波；bob＝甲案，字被波抬起來；gl＝乙案（預設），轉盤的字畫進 WebGL、其他照甲案 */
 function fxMode(){return S.fx||'gl'}
 /* 甲案：找出一層裡要動的單位（區塊；轉盤只動 .lab、.rem 和大字的每一個字），量好中心存起來 */
 function bobUnits(root,noDialText){var U=[],add=function(e){var r=e.getBoundingClientRect();if(r.width&&r.height)U.push({e:e,x:r.left+r.width/2,y:r.top+r.height/2})};
@@ -862,7 +867,7 @@ function waveFx(fx,old){if(!old)return;var E=WAVE_E,far=0;[[0,0],[innerWidth,0],
   var clr=function(el){el.style.webkitMaskImage='';el.style.maskImage=''},done=false,
     gd=fxMode()==='gl'?glDial(old,app):null,bob=fxMode()!=='cut',UO=bob?bobUnits(old,!!gd):[],UN=bob?bobUnits(app,!!gd):[],
     to=0,end=function(){if(done)return;done=true;clearTimeout(to);if(waveEnd===end)waveEnd=null;if(window.Sky&&Sky.pre)Sky.pre(null);clr(app);bobClear(UN);if(gd)gd.done();if(old.parentNode)old.remove();document.body.classList.remove('xfade');if(window.Sky&&Sky.wave)Sky.wave(null)},
-    frame=function(){var t=(performance.now()-fx.t0)/1000,R=Math.max(0,t-WAVE_GAP)*fx.v,a=R+WAVE_G,b=R-WAVE_G;
+    frame=function(){var t=(performance.now()-fx.t0)/1000,R=Math.max(0,t)*fx.v,a=R+WAVE_G,b=R-WAVE_G;
       if(R<=0)clr(old);else waveMask(old,fx.x,fx.y,'transparent '+Math.max(0,a-E).toFixed(1)+'px, #000 '+(a+E).toFixed(1)+'px');
       if(b+E<=0){app.style.webkitMaskImage=app.style.maskImage='linear-gradient(transparent,transparent)'}
       else waveMask(app,fx.x,fx.y,'#000 '+Math.max(0,b-E).toFixed(1)+'px, transparent '+(b+E).toFixed(1)+'px');
@@ -882,14 +887,15 @@ function render(){
   TABS.forEach(function(t,n){var b=tabsEl.children[n+1],on=tab===t[0];b.className=on?'on':'';if(on){b.setAttribute('aria-current','page');tabsEl.style.setProperty('--ti',n)}else b.removeAttribute('aria-current')});
   if(!G){var J0=track(cur),jk=DK(cur)+'|'+J0.at+'|'+J0.here;
     if(tab==='now'&&lastJK&&lastJK!==jk&&lastJK.split('|')[0]===DK(cur)&&!arrFx&&!sh&&!calm){var le=app.querySelector('.locl');
-      if(le){var lr=le.getBoundingClientRect(),lx=lr.left+lr.width/2,ly=lr.top+lr.height/2;if(window.Sky&&Sky.drop)Sky.drop(lx,ly);arrFx={x:lx,y:ly,t0:performance.now(),v:Math.max(300,innerHeight*.62)}}}
+      if(le){var lr=le.getBoundingClientRect(),lx=lr.left+lr.width/2,ly=lr.top+lr.height/2;arrFx={x:lx,y:ly,t0:performance.now(),v:Math.max(300,innerHeight*.62)}}}
     lastJK=jk}
   if(waveEnd)waveEnd(); /* 轉場還沒完又要重畫（新的轉場、每分鐘重畫、切分頁…）：先把它收尾，複本和新內容才不會帶著遮罩、位移、藏起來的字 */
   var oldEl=arrFx?mkOld():null;noRoll=!!arrFx;
   app.innerHTML=tab==='now'?vNow():tab==='plan'?vPlan():vMore();
   noRoll=false;
   if(tab!==lastTab){app.scrollTop=0;lastTab=tab}
-  if(arrFx){var fx0=arrFx;arrFx=null;waveFx(fx0,oldEl)} /* 頁面本身不捲，捲的是 #app；換分頁時回到最上面 */
+  /* 水滴和換頁同一刻開始：水波的圈就是新舊兩頁的交界 */
+  if(arrFx){var fx0=arrFx;arrFx=null;fx0.t0=performance.now();if(window.Sky&&Sky.drop)Sky.drop(fx0.x,fx0.y);waveFx(fx0,oldEl)} /* 頁面本身不捲，捲的是 #app；換分頁時回到最上面 */
   var a=document.getElementById('arc'),hd=document.getElementById('hdot'),rl=document.querySelector('.roll');
   lastBig=rl?rl.dataset.s:'';if(a)lastFrac=+a.dataset.f;
   requestAnimationFrame(function(){requestAnimationFrame(function(){
