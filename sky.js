@@ -270,10 +270,12 @@ var COMP_FS=HEAD+['',
 ' vec2 dn=vec2(0.);float dm=0.,trl=0.;float wp=texture(uWp,p/uV).r;',
 /* 窗上的水：一次算，法線用螢幕導數（省掉兩次重算） */
 ' if(uDL.x+uDL.y+uDL.z>.002){vec4 D=texture(uDr,tuv(p));dn=(D.xy-.5)*.5;dm=D.z;trl=D.w;}',
-/* 「到了」：一滴水落在按鈕上，三圈水波往外擴散，經過的地方天空和玻璃都被折射，波峰亮、波谷暗，落點閃一下 */
+/* 一滴水落下，兩圈水波往外擴散，經過的地方天空和玻璃都被折射，波峰亮、波谷暗，落點閃一下。
+   11/28 Ken：三圈太多 → 兩圈。拿掉中間那圈；留下的兩圈跟換頁的兩條邊（舊頁 Ro、新頁 Rn，差 WAVE_GAP .32 秒）對齊。
+   每圈的波從 sin(5.5) 改 sin(3)：原本一圈會畫出兩條亮帶（看起來像更多圈），改成一圈一條；強度乘 1.15 補回來 */
 ' float drw=0.,drf=0.;if(uDrop.z<1.8){vec2 dv=p-uDrop.xy;float rr=length(dv)+1e-3;',
-'  for(int k=0;k<3;k++){float age=uDrop.z-float(k)*.16;if(age<=0.)continue;float R=age*uV.y*.62;float w=26.+age*46.;float x=rr-R;',
-'   float env=exp(-x*x/(w*w))*pow(max(1.-age/1.6,0.),1.5)*(1.-float(k)*.3)*smoothstep(0.,30.,rr);float wv=sin(x/w*5.5)*env;dn+=dv/rr*wv*.075;drw+=wv;}',
+'  for(int k=0;k<2;k++){float age=uDrop.z-float(k)*.32;if(age<=0.)continue;float R=age*uV.y*.62;float w=26.+age*46.;float x=rr-R;',
+'   float env=exp(-x*x/(w*w))*pow(max(1.-age/1.6,0.),1.5)*(1.-float(k)*.3)*smoothstep(0.,30.,rr);float wv=sin(x/w*3.)*env*1.15;dn+=dv/rr*wv*.075;drw+=wv;}',
 '  drf=exp(-rr*rr/1400.)*smoothstep(.35,0.,uDrop.z)*smoothstep(0.,.04,uDrop.z);}',
 ' float fogW=max(clamp(uWet*1.1,0.,1.)*(1.-trl*.9),uMist)*(1.-smoothstep(.1,.25,dm))*(1.-wp);',
 ' vec2 q=p+dn*240.;float gm,tk;vec3 col=world(q,fogW*3.4,gm,tk);',

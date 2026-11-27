@@ -167,8 +167,13 @@ function judge(D,o){var P=o.P||Planner(D),now=o.now,L2=D.ll2||{},RAD=D.rad||{},I
   /* 人在地點 p：這裡有還沒去的項目 → here＝照順序第一個；出發點同時是最後一站（飯店）時，看時間比較接近出門還是回來 */
   function at(p){var c=IT.filter(function(x){return x.place===p&&open(x.id)}),V=visits(p),near=null;
     V.forEach(function(v){if(v.item&&!open(v.item))return;if(!near||Math.abs(v.t-now)<Math.abs(near.t-now))near=v});
-    if(c.length&&!(near&&near.start))return {here:c[0].id,ri:idx(c[0].id)};
-    return {here:null,ri:near?near.ri:-1}}
+    if(!c.length)return {here:null,ri:near?near.ri:-1};
+    /* 同一個地點有好幾項（早上在松山站寄小包、下午回來拿；飯店早上退房、下午回來拿行李）：
+       選計畫上「待在那裡的時間」最接近現在的那一項，不是永遠第一項（11/28 模擬：整天沒開 app、下午才第一次打開） */
+    var hc=c[0].id,bd=1e9;base.rows.forEach(function(r){if(r.it.place!==p||!open(r.it.id))return;var d=now<r.arr?r.arr-now:now>r.leave?now-r.leave:0;if(d<bd){bd=d;hc=r.it.id}});
+    /* 最接近的是「從這裡出門」：還沒出門，除非這一項就排在出門那時候（例如出發的飯店第一件事就是退房） */
+    if(near&&near.start){var r0=base.rows.filter(function(r){return r.it.id===hc})[0];if(!(r0&&r0.arr<=hm(D.start)+5))return {here:null,ri:near.ri}}
+    return {here:hc,ri:idx(hc)}}
   function passed(ri){var out=[];for(var n=0;n<ri&&n<IT.length;n++){var id=IT[n].id;if(open(id)&&!back[id])out.push(id)}return out}
   function out(r,src,anchor){r.src=src;
     /* 還在出發點、還沒到預定出門時間：從預定出門時間開始排（不然半夜打開會排到首班車） */

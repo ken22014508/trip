@@ -341,11 +341,13 @@ function skyWx(i,t0){if((!isLive(i)||REH)&&S.dwx)return DWXV[S.dwx];var w=WX[ymd
 function skyAt(i,t0){var d=dayDate(i);return new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate(),0,t0)-TRIP.utc*3600000)}
 /* 定位可用、但離所有地點都超過 1.5 公里：定位證明人不在行程上，不說「在 X」 */
 function farOff(m){var J=m.st&&m.st.J;return !!(J&&J.gps&&J.far!=null&&J.far>1500)}
-function head(m){var i=m.i,D=DAYS[i],where=farOff(m)?'下一個期限':m.st.here?'在 '+item(i,m.st.here).name:m.kind==='move'?'往 '+m.next.it.name:m.kind==='gap'?'往 '+m.gap.it.name:m.kind==='conf'?'往 '+m.is.it.name:D.name;
+/* 人在某一項時怎麼稱呼：「回高知」「回飯店」這種回去的項目，用地點名（在 ブライトパーク），不說「在 回高知」 */
+function hereName(i,it){return /^回/.test(it.name)?pname(i,it.place):it.name}
+function head(m){var i=m.i,D=DAYS[i],where=farOff(m)?'下一個期限':m.st.here?'在 '+hereName(i,item(i,m.st.here)):m.kind==='move'?'往 '+m.next.it.name:m.kind==='gap'?'往 '+m.gap.it.name:m.kind==='conf'?'往 '+m.is.it.name:D.name;
   return '<header class="hd"><div><b>'+esc(where)+'</b><span>'+esc(D.name)+'　'+dlabel(i)+'</span></div>'+wxNow(i,m.now)
    +'</header>'+pvBar(m.now)+locLine(m)}
 /* L1：app 判斷你在哪，一句話；點了可以修正 */
-function locTxt(m){var J=m.st.J,i=m.i;if(!J)return '';var it=J.here&&item(i,J.here),nm=function(p){return it&&it.place===p?it.name:pname(i,p)},F=S.fix[DK(i)],t;
+function locTxt(m){var J=m.st.J,i=m.i;if(!J)return '';var it=J.here&&item(i,J.here),nm=function(p){return pname(i,p)},F=S.fix[DK(i)],t;
   if(J.route)t='你在往'+pname(i,J.route.to)+'的路上';
   else if(J.src==='gps')t='你在'+nm(J.at);
   else if(J.src==='near')t='你離'+pname(i,J.at)+'約 '+mtxt(J.d);
@@ -468,12 +470,21 @@ function vNow(){var m=vmOf(cur),o=say(m),tg=m.tg,body=dial(o.frac,esc(o.dlab||o.
   return '<section class="stage one '+o.st+'">'+head(m)+geoAsk()+body+acts+extra+tipb+ask+'</section>'}
 /* 提醒：項目的 tips 和當天的 tips；每條是字串，或 {t, show}（跟著開關顯示） */
 function tipList(x){return (x&&x.tips||[]).filter(function(t){return typeof t==='string'||shown(t)}).map(function(t){return typeof t==='string'?t:t.t})}
-/* 現在用得到的提醒：人在的那一項、接下來要去的那一項、整天的 */
+/* 現在用得到的提醒：人在的那一項、接下來要去的那一項、整天的。
+   這一天走完了（沒有下一站）：「今天」換成「明天」（11/28 Ken：走完只說「走完了」，不知道明天幾點出門、前一晚要準備什麼） */
 function tipGroups(m){var i=m.i,D=DAYS[i],g=[],hi=m.st&&m.st.here&&item(i,m.st.here),nx=m.next&&m.next.it,a;
-  if(hi&&(a=tipList(hi)).length)g.push({h:'這裡：'+hi.name,a:a});
+  if(hi&&(a=tipList(hi)).length)g.push({h:'這裡：'+hereName(i,hi),a:a});
+  if(dayOver(m)){var tm=tomorrowTips(i);if(tm)g.push(tm);return g}
   if(nx&&!(hi&&nx.id===hi.id)&&(a=tipList(nx)).length)g.push({h:'接下來：'+nx.name,a:a});
   if((a=tipList(D)).length)g.push({h:'今天',a:a});
   return g}
+/* 今天的行程走完了：沒有下一站（到了最後一站，或全部做完） */
+function dayOver(m){return m.kind==='end'||(m.kind==='here'&&!m.next)}
+/* 明天：幾點從哪裡出門、第一班車（照原訂排一次）、明天整天的提醒。最後一天沒有明天 */
+function tomorrowTips(i){var j=i+1;if(j>=DAYS.length)return null;var D=DAYS[j],out=[D.start+' 從'+pname(j,D.startAt)+'出門'],h0=null;
+  PL[j].plan({at:D.startAt,t:hm(D.start),here:null,done:{},drop:{},cut:{},ext:{}}).rows.some(function(r){return r.ride&&r.ride.hops.some(function(h){if(!h.walk){h0=h;return true}return false})});
+  if(h0)out.push('第一班車：'+fmt(h0.dep)+' 在'+pname(j,h0.from)+'搭'+h0.how);
+  return {h:'明天：'+D.name+'（'+dlabel(j)+'）',a:out.concat(tipList(D))}}
 
 /* ---------- 行程 ---------- */
 function hopsTxt(R){return R?R.hops.map(function(h){return h.walk?h.how:fmt(h.dep)+' '+h.how}).join(' → '):''}
