@@ -73,6 +73,10 @@ function Planner(day){
       if(ok(pl)){/* 縮短的景點：只縮到剛好來得及（每次加回 5 分，加到不行為止） */
         short.forEach(function(x){var room=(x.stay||0)-x.min;while(room>=5){ext2[x.id]=(ext2[x.id]||0)+5;if(!ok(run(drop))){ext2[x.id]-=5;break}room-=5}});
         return {pl:run(drop),lost:lost,short:short.map(function(x){return {it:x,stay:x.min+(ext2[x.id]||0)}})}}
+      /* 下一段是預約的車（fixed）或末班，待太久就搭不到：先縮短出發那一站的可選景點，再考慮放掉
+         （11/28 第 3 天：山六醬油照原訂待 50 分，趕不上 14:45 預約的計程車，原本直接說山六醬油、橄欖公園都去不了） */
+      if(!pl.issues.length&&pl.unknown&&(pl.unknown.dead||pl.unknown.missed)){var lr=pl.rows[pl.rows.length-1],px=lr&&lr.it;
+        if(px&&px.kind==='soft'&&px.id!==st.here&&px.place===pl.unknown.from&&canCut(px)){cut[px.id]=1;short.push(px);continue}}
       var bad=pl.issues.length?pl.issues[0].it:pl.unknown.it;
       if(bad.kind==='soft'&&bad.id!==st.here){drop[bad.id]=1;self[bad.id]=1;lost.push(bad);own.push(bad);continue}
       var c=softsBefore(bad.id),cc=c.filter(canCut);
