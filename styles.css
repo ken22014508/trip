@@ -715,3 +715,63 @@ body.glgl.day .geoask{color:#14233B}
 .stage.one .tipbar+.askbar{margin-top:8px}
 #sheet .ty.tiph{margin-top:14px}
 #sheet .rowb.tip{min-height:0;padding:10px 0}#sheet .rowb.tip b{font-size:16px;font-weight:500;line-height:1.5}
+/* 怎麼搭（11/28）：圓環下面「在哪裡搭什麼」那條的下一行 */
+.stage .ref.board{display:flex;align-items:flex-start;justify-content:center;gap:6px;margin:7px auto 0;max-width:340px;white-space:normal;font-size:13.5px;line-height:1.45;color:rgba(255,255,255,.84);text-align:left}
+.stage .ref.board svg{flex:none;width:15px;height:15px;margin-top:2px;opacity:.8}
+.stage .ref.board+.ref{margin-top:2px}
+.nw{white-space:nowrap}
+/* 路線圖按鈕：跟注意事項並排，不多佔一行 */
+.stage.one .bar2{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;margin-top:12px}
+.stage.one .bar2 .askbar{margin-top:0;min-width:0;padding:0 12px 0 14px;gap:7px}
+.stage.one .bar2 .askbar>svg:last-child{display:none}
+.stage.one .bar2 .askbar span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stage.one .bar2+.askbar{margin-top:8px}
+@media (max-height:800px){.stage.one .bar2{margin-top:8px}}
+/* 路線圖（11/28）：粗的彩色線＝路線，白底圓＝站（大圓上下車、換車；小圓其他地點），白點＝中間停的站，虛線＝走路 */
+#sheet .rmap{margin:12px 0 6px}
+#sheet .rmap .r{display:grid;grid-template-columns:48px 20px minmax(0,1fr);column-gap:10px;position:relative}
+#sheet .rmap .t{text-align:right;font-size:15px;font-weight:600;line-height:22px;font-variant-numeric:tabular-nums;white-space:nowrap}
+#sheet .rmap .t small{font-size:12px;font-weight:500;opacity:.8;margin-left:2px}
+#sheet .rmap .k{position:relative;display:block}
+#sheet .rmap .k::before,#sheet .rmap .k::after{content:"";position:absolute;left:7px;width:6px;border-radius:3px;background:var(--lc,transparent)}
+#sheet .rmap .r.e .k::before,#sheet .rmap .r.s .k::before,#sheet .rmap .r.you .k::before{top:-1px;bottom:-1px}
+#sheet .rmap .r.n .k::before{top:-1px;height:12px;background:var(--la)}
+#sheet .rmap .r.n .k::after{top:11px;bottom:-1px;background:var(--lb)}
+#sheet .rmap .r.w .k::before,#sheet .rmap .r.n.wa .k::before,#sheet .rmap .r.n.wb .k::after{left:9px;width:0;border-left:2px dotted currentColor;opacity:.45;background:none;border-radius:0}
+#sheet .rmap .r.n .k i{position:absolute;left:1px;top:2px;width:18px;height:18px;border-radius:50%;background:#fff;border:4px solid var(--nc);box-sizing:border-box;z-index:1}
+#sheet .rmap .r.n.sm .k i{left:4px;top:5px;width:12px;height:12px;border-width:2.5px}
+#sheet .rmap .r.s .k i{position:absolute;left:7px;top:8px;width:6px;height:6px;border-radius:50%;background:#fff;z-index:1;box-shadow:0 0 0 1px rgba(0,0,0,.12)}
+#sheet .rmap .c{min-width:0;padding:0 0 14px;line-height:1.4}
+#sheet .rmap .r.n .c b{display:block;font-size:17px;line-height:22px;font-weight:700}
+#sheet .rmap .r.n.sm .c b{font-size:15px;font-weight:600}
+#sheet .rmap .r.n .c>span{display:block;font-size:13px;opacity:.72;margin-top:1px}
+#sheet .rmap .r.n .c .xf{display:inline-block;opacity:1;font-size:12px;font-weight:700;padding:1px 8px;border-radius:9px;background:rgba(255,194,51,.25);margin:3px 6px 0 0}
+#sheet .rmap .here{display:inline-block;font-style:normal;font-size:12px;font-weight:700;color:#0B1424;background:#8FE0FF;border-radius:9px;padding:1px 8px;margin:3px 6px 0 0}
+#sheet .rmap .r.n.at .k i{box-shadow:0 0 0 4px rgba(143,224,255,.35),0 0 12px 3px rgba(143,224,255,.7)}
+#sheet .rmap .r.e .c{padding:1px 0 14px}
+#sheet .rmap .r.e .c b{font-size:15px;font-weight:600}
+#sheet .rmap .ln{display:inline-block;font-style:normal;color:#fff;font-size:12px;font-weight:700;padding:1px 7px;border-radius:5px;margin-right:6px;vertical-align:1px;text-shadow:0 1px 1px rgba(0,0,0,.25)}
+#sheet .rmap .tg{margin-left:6px;vertical-align:1px}
+#sheet .rmap .brd{display:flex;gap:5px;align-items:flex-start;font-size:13.5px;line-height:1.45;margin-top:4px}
+#sheet .rmap .brd svg{flex:none;width:14px;height:14px;margin-top:2px;opacity:.75}
+#sheet .rmap .r.s .c{font-size:13px;opacity:.75;padding:2px 0 4px;line-height:18px}
+#sheet .rmap .r.s .t{font-size:12px;font-weight:500;opacity:.6;line-height:22px}
+#sheet .rmap .r.you .k i{position:absolute;left:1px;top:1px;width:18px;height:18px;border-radius:50%;background:#8FE0FF;border:3px solid #fff;box-sizing:border-box;z-index:2;box-shadow:0 0 12px 3px rgba(143,224,255,.8)}
+#sheet .rmap .r.you .c{font-size:13px;font-weight:700;padding:1px 0 8px;color:#8FE0FF}
+#sheet .rmap .r.past{opacity:.5}
+#sheet .rmap .wk{display:inline-flex;align-items:center;gap:5px;font-size:13px;opacity:.75}
+#sheet .rmap .wk svg{width:14px;height:14px}
+#sheet .rmap .r.e.w .c{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;padding:2px 0 12px}
+#sheet .rmap .mini{height:30px;padding:0 12px;font-size:13px;margin-top:6px;display:inline-flex;align-items:center}
+#sheet .rmap .r.e.w .mini{margin-top:0}
+#sheet .rmap details.rs>summary{list-style:none;cursor:pointer}
+#sheet .rmap details.rs>summary::-webkit-details-marker{display:none}
+#sheet .rmap details.rs>summary .c{opacity:.65;text-decoration:underline dotted}
+#sheet .rmap details.rs[open]>summary{display:none}
+body.glgl.day #sheet .rmap .here{background:#1580A6;color:#fff}
+body.glgl.day #sheet .rmap .r.you .c{color:#1580A6}
+body.glgl.day #sheet .rmap .r.you .k i{background:#1580A6}
+body.glgl.day #sheet .rmap .r.n .c .xf{background:rgba(255,170,0,.28)}
+@media (prefers-reduced-motion:no-preference){
+  #sheet .rmap .r.you .k i,#sheet .rmap .r.n.at .k i{animation:youPulse 1.8s ease-in-out infinite}
+  @keyframes youPulse{50%{box-shadow:0 0 0 6px rgba(143,224,255,.15),0 0 18px 6px rgba(143,224,255,.45)}}}

@@ -205,8 +205,9 @@ var COMP_FS=HEAD+['',
 '  vec2 g=floor(p/34.);float h=h21(g+71.);if(h>.55){vec2 cc=(g+.2+.6*vec2(h21(g+5.),h21(g+6.)))*34.;vec2 v=p-cc;float r=length(v);float life=fract(uT*.02+h*7.);float al=smoothstep(0.,.08,life)*smoothstep(1.,.6,life);',
 '   float a=atan(v.y,v.x);float sz=2.5+h*4.;float arm=smoothstep(.75,1.,abs(cos(a*3.+h*6.)))*smoothstep(sz,0.,r)+smoothstep(sz*.35,0.,r);col=mix(col,vec3(.95,.97,1.),clamp(arm,0.,1.)*al*uFrost*.85);}}',
 ' return col;}',
-/*  兩圈換頁（D3）：uWv＝圓心 xy、外圈 Ro（z，負數＝沒有在換頁）、內圈 Rn（w）。舊頁的玻璃 uOp 是負的，只畫在 Ro 外；新頁的只畫在 Rn 內；中間的空帶只有天空。邊緣 ±18px */
-'float wv(int i,vec2 p){float o=uOp[i];if(uWv.z>=0.){float dd=length(p-uWv.xy);if(o<0.)o=-o*smoothstep(uWv.z-18.,uWv.z+18.,dd);else o=uWv.w<=0.?0.:o*(1.-smoothstep(uWv.w-18.,uWv.w+18.,dd));}return abs(o);}',
+/*  換頁（11/28 改）：uWv＝圓心 xy、水波第一圈的半徑 R（z，負數＝沒有在換頁）、字的半寬 G（w）。舊頁的玻璃 uOp 是負的，只畫在 R 外；新頁的只畫在 R 內。
+    邊緣只留 ±1.5px：同一塊面板新舊兩頁都有時，寬的交界會讓那一圈的玻璃變半透明。字（轉盤）在 R±G 這一窄條裡消失，見最後的乙案 */
+'float wv(int i,vec2 p){float o=uOp[i];if(uWv.z>=0.){float dd=length(p-uWv.xy);if(o<0.)o=-o*smoothstep(uWv.z-1.5,uWv.z+1.5,dd);else o=uWv.z<=0.?0.:o*(1.-smoothstep(uWv.z-1.5,uWv.z+1.5,dd));}return abs(o);}',
 'vec3 world(vec2 p,float lod0,out float gm,out float tk){',
 ' int top=-1;float tsd=1e9;float shd=0.;float tOp=1.;gm=0.;tk=0.;',
 ' for(int i=0;i<24;i++){if(i>=uN)break;vec4 c=uC[i];if(p.x<c.x||p.y<c.y||p.x>c.z||p.y>c.w)continue;float vo=wv(i,p);if(vo<.01)continue;vec4 r=uR[i];',
@@ -271,11 +272,12 @@ var COMP_FS=HEAD+['',
 /* 窗上的水：一次算，法線用螢幕導數（省掉兩次重算） */
 ' if(uDL.x+uDL.y+uDL.z>.002){vec4 D=texture(uDr,tuv(p));dn=(D.xy-.5)*.5;dm=D.z;trl=D.w;}',
 /* 一滴水落下，兩圈水波往外擴散，經過的地方天空和玻璃都被折射，波峰亮、波谷暗，落點閃一下。
-   11/28 Ken：三圈太多 → 兩圈。拿掉中間那圈；留下的兩圈跟換頁的兩條邊（舊頁 Ro、新頁 Rn，差 WAVE_GAP .32 秒）對齊。
-   每圈的波從 sin(5.5) 改 sin(3)：原本一圈會畫出兩條亮帶（看起來像更多圈），改成一圈一條；強度乘 1.15 補回來 */
+   11/28 Ken：三圈太多 → 兩圈。每圈的波從 sin(5.5) 改 sin(3)：原本一圈會畫出兩條亮帶（看起來像更多圈），改成一圈一條；強度乘 1.15 補回來。
+   11/28 之二：第一圈只折射舊頁，第二圈（晚 .32 秒，app.js WAVE_GAP）經過的地方換成新頁，所以兩圈一樣強（原本第二圈 ×.7 → ×.85）。
+   圈的寬度長得慢一點（26＋46t → 22＋30t），擴散到後面不會糊成一大片 */
 ' float drw=0.,drf=0.;if(uDrop.z<1.8){vec2 dv=p-uDrop.xy;float rr=length(dv)+1e-3;',
-'  for(int k=0;k<2;k++){float age=uDrop.z-float(k)*.32;if(age<=0.)continue;float R=age*uV.y*.62;float w=26.+age*46.;float x=rr-R;',
-'   float env=exp(-x*x/(w*w))*pow(max(1.-age/1.6,0.),1.5)*(1.-float(k)*.3)*smoothstep(0.,30.,rr);float wv=sin(x/w*3.)*env*1.15;dn+=dv/rr*wv*.075;drw+=wv;}',
+'  for(int k=0;k<2;k++){float age=uDrop.z-float(k)*.32;if(age<=0.)continue;float R=age*uV.y*.62;float w=22.+age*30.;float x=rr-R;',
+'   float env=exp(-x*x/(w*w))*pow(max(1.-age/1.6,0.),1.5)*(1.-float(k)*.15)*smoothstep(0.,30.,rr);float wv=sin(x/w*3.)*env*1.15;dn+=dv/rr*wv*.075;drw+=wv;}',
 '  drf=exp(-rr*rr/1400.)*smoothstep(.35,0.,uDrop.z)*smoothstep(0.,.04,uDrop.z);}',
 ' float fogW=max(clamp(uWet*1.1,0.,1.)*(1.-trl*.9),uMist)*(1.-smoothstep(.1,.25,dm))*(1.-wp);',
 ' vec2 q=p+dn*240.;float gm,tk;vec3 col=world(q,fogW*3.4,gm,tk);',
@@ -292,9 +294,9 @@ var COMP_FS=HEAD+['',
 ' col=col*(1.-max(-drw,0.)*.16)+vec3(1.,.99,.96)*(max(drw,0.)*.3+drf*.55);',
 ' col=col*(1.-max(-gRip,0.)*.22)+vec3(1.)*max(gRip,0.)*.28;',
 ' col+=vec3(.75,.82,.9)*rn*uRain*inG+vec3(1.)*sn*uSnow*inG*.85;',
-/* 乙案：轉盤的字（舊、新兩張貼圖，預乘透明度）。取樣座標用折射後的 q，跟玻璃一起被水波和窗上的水折彎；舊字只在外圈外、新字只在內圈內 */
+/* 乙案：轉盤的字（舊、新兩張貼圖，預乘透明度）。取樣座標用折射後的 q，跟玻璃一起被水波和窗上的水折彎；舊字只在 R+G 外、新字只在 R−G 內 */
 ' if(uTon>.5){vec2 tc=(q-uTx.xy)/uTx.zw;if(tc.x>0.&&tc.y>0.&&tc.x<1.&&tc.y<1.){float dd=length(p-uWv.xy);',
-'  vec4 to=texture(uTo,tc)*smoothstep(uWv.z-18.,uWv.z+18.,dd);vec4 tn=uWv.w<=0.?vec4(0.):texture(uTn,tc)*(1.-smoothstep(uWv.w-18.,uWv.w+18.,dd));',
+'  float ra=uWv.z+uWv.w,rb=uWv.z-uWv.w;vec4 to=texture(uTo,tc)*smoothstep(ra-10.,ra+10.,dd);vec4 tn=rb+10.<=0.?vec4(0.):texture(uTn,tc)*(1.-smoothstep(rb-10.,rb+10.,dd));',
 '  col=col*(1.-to.a)+to.rgb;col=col*(1.-tn.a)+tn.rgb;}}',
 ' float dt=h21(gl_FragCoord.xy+fract(uT))/255.;o=vec4(col+dt,1.);}'].join('\n');
 var UN='uGy uSwp uDrop uWv uTo uTn uTx uTon uOp uRip uScape uFlash uDay uDr uV uS uT uCov uRain uSnow uFog uNight uWind uTilt uLum uMoonPh uMoonV uSunV uSun uMoon uSunP uMoonP uN uR uC uRad uK uWet uMist uFrost uSR uDL uSky uOcc uWp'.split(' ');
@@ -342,7 +344,7 @@ var RB=new Float32Array(NMAX*4),CB=new Float32Array(NMAX*4),RD=new Float32Array(
 /* 換頁中：舊面板整塊已在外圈內、新面板整塊還在內圈外，就不用畫，省下面板上限（NMAX） */
 function wvSkip(el,r){var old=!!el.closest('.xold'),cx=Math.max(r.left,Math.min(WV.x,r.right)),cy=Math.max(r.top,Math.min(WV.y,r.bottom)),near=Math.hypot(cx-WV.x,cy-WV.y),
     far=Math.max(Math.hypot(r.left-WV.x,r.top-WV.y),Math.hypot(r.right-WV.x,r.top-WV.y),Math.hypot(r.left-WV.x,r.bottom-WV.y),Math.hypot(r.right-WV.x,r.bottom-WV.y));
-  return old?far<WV.ro-18:(WV.rn<=0||near>WV.rn+18)}
+  return old?far<WV.ro-18:(WV.ro<=0||near>WV.ro+18)}
 function collect(){var els=document.querySelectorAll(GSEL),n=0,s='',fadeMode=document.body.classList.contains('intro')||document.body.classList.contains('lock')||document.body.classList.contains('xfade');
   for(var k=0;k<els.length&&n<NMAX;k++){var el=els[k];if(el.matches(SOLID))continue;var r=el.getBoundingClientRect();if(WV.on&&wvSkip(el,r))continue;var isD=el.classList&&el.classList.contains('dial');if(isD){var ins=r.width*.03;r={left:r.left+ins,top:r.top+ins,width:r.width-2*ins,height:r.height-2*ins,right:r.right-ins,bottom:r.bottom-ins}}if(r.width<4||r.height<4||r.bottom<0||r.top>H||r.right<0||r.left>W)continue;
     var cl=clipC.get(el);if(cl===undefined){cl=clipOf(el);clipC.set(el,cl)}var c=cl?cl.getBoundingClientRect():{left:-1e4,top:-1e4,right:1e4,bottom:1e4};
@@ -446,7 +448,7 @@ return {
   draw:function(){if(on)poke()},
   /* 預熱乙案：開 app 後先用一張字的貼圖畫一次（畫在畫面外），第一次換頁不會因為建貼圖、上傳慢一兩格 */
   warm:function(c){if(!this.text(c,c,{x:-1e5,y:-1e5,w:c.width||1,h:c.height||1}))return false;poke();TX.on=0;return true},
-  /* 換頁的兩圈：每一幀由 app.js 設；轉場中 loop 每一幀都重畫，所以這裡不 poke（v51 每幀多畫一次） */
+  /* 換頁：每一幀由 app.js 設 ro＝水波第一圈的半徑 R、rn＝字消失那一窄條的半寬 G（11/28 起）；轉場中 loop 每一幀都重畫，所以這裡不 poke（v51 每幀多畫一次） */
   wave:function(x,y,ro,rn){if(x==null){WV.on=0;poke()}else{WV.x=x;WV.y=y;WV.ro=ro;WV.rn=rn;WV.on=1}},
   drop:function(x,y){if(calm)return;DRP={x:x==null?innerWidth/2:x,y:y==null?innerHeight/2:y,t:performance.now()};poke()},
   set:function(p){if(typeof SunCalc==='undefined')return;S.scape=p.scape==='sea'?1:p.scape==='city'?2:0;var k=[p.scape,p.lat,p.lng,Math.round(p.at.getTime()/60000),JSON.stringify(p.wx||{})].join('|');

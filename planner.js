@@ -13,13 +13,24 @@ function dur(m){m=Math.round(m);return m<60?m+' 分':Math.floor(m/60)+' 小時'+
 function Planner(day){
   var ITEMS=day.items,LEGS=day.legs,P=day.places;
   var EDGES={};Object.keys(LEGS).forEach(function(k){var p=k.split('>');(EDGES[p[0]]=EDGES[p[0]]||[]).push({to:p[1],L:LEGS[k]})});
+  /* 怎麼搭、路線圖（11/28）：路段的 board（怎麼搭）、stops（中間停的站）、line（路線名）、color（路線顏色）；
+     某一班不一樣時寫在那一班的第 4 格 {board,stops,...}，蓋過路段的。沒有就不加 ex */
+  function ex(L,R,h){var x=R&&R[3]&&typeof R[3]==='object'?R[3]:{};['board','stops','line','color'].forEach(function(k){var v=x[k]!=null?x[k]:L[k];if(v!=null)(h.ex=h.ex||{})[k]=v});return h}
   function hop(L,t){
     /* 固定間隔的車：freq:{first,last,every,ride}（首班、末班、幾分鐘一班、車程） */
     if(L.freq){var F=L.freq,f0=hm(F.first),f1=hm(F.last),d=t<=f0?f0:f0+Math.ceil((t-f0)/F.every)*F.every;if(d>f1)return null;
-      return {dep:d,arr:d+F.ride,how:L.name||'車',wait:d-t,last:d+F.every>f1,est:!!L.est,freq:1}}
-    if(L.walk!=null)return {dep:t,arr:t+L.walk,how:(L.name?L.name+' 約 ':'走路 ')+L.walk+' 分',est:!!L.est,walk:1};
-    for(var i=0;i<L.runs.length;i++){var d=hm(L.runs[i][0]);if(d>=t)return {dep:d,arr:hm(L.runs[i][1]),how:L.runs[i][2],wait:d-t,last:i===L.runs.length-1&&!L.partial,est:!!L.est,fixed:!!L.fixed}}
+      return ex(L,null,{dep:d,arr:d+F.ride,how:L.name||'車',wait:d-t,last:d+F.every>f1,est:!!L.est,freq:1})}
+    if(L.walk!=null)return ex(L,null,{dep:t,arr:t+L.walk,how:(L.name?L.name+' 約 ':'走路 ')+L.walk+' 分',est:!!L.est,walk:1});
+    for(var i=0;i<L.runs.length;i++){var d=hm(L.runs[i][0]);if(d>=t)return ex(L,L.runs[i],{dep:d,arr:hm(L.runs[i][1]),how:L.runs[i][2],wait:d-t,last:i===L.runs.length-1&&!L.partial,est:!!L.est,fixed:!!L.fixed})}
     return null}
+  /* 正在搭的那一班（路線圖用，11/28）：a→b、現在已經在車上，找發車時間 ≤ now 的最後一班 */
+  function onboard(a,b,now){var e=(EDGES[a]||[]).filter(function(x){return x.to===b})[0],L=e&&e.L,h=null;if(!L)return null;
+    if(L.runs){for(var i=L.runs.length-1;i>=0&&!h;i--){var d=hm(L.runs[i][0]);if(d<=now)h=ex(L,L.runs[i],{dep:d,arr:hm(L.runs[i][1]),how:L.runs[i][2],est:!!L.est,fixed:!!L.fixed})}}
+    else if(L.freq){var F=L.freq,f0=hm(F.first),d0=f0+Math.floor(Math.max(0,now-f0)/F.every)*F.every;h=ex(L,null,{dep:d0,arr:d0+F.ride,how:L.name||'車',est:!!L.est,freq:1})}
+    else h=ex(L,null,{dep:now,arr:now+L.walk,how:(L.name?L.name+' 約 ':'走路 ')+L.walk+' 分',est:!!L.est,walk:1});
+    if(h){h.from=a;h.to=b}return h}
+  /* a→b 這段路 t 之後的第一班（人在車站等車時，畫面說「下一班怎麼搭」用） */
+  function hopAt(a,b,t){var e=(EDGES[a]||[]).filter(function(x){return x.to===b})[0],h=e?hop(e.L,t):null;if(h){h.from=a;h.to=b}return h}
   /* 兩地之間最早到的走法（可以經過別的地方轉）。班表不完整或沒有路段時回 unknown，不猜 */
   /* 不看時間，每個地點到 b 最少要幾段（說明「為什麼到不了」時，用最靠近 b 的那段斷掉的路來講） */
   function hopsTo(b){var D={},Q=[b];D[b]=0;while(Q.length){var v=Q.shift();Object.keys(EDGES).forEach(function(u){EDGES[u].forEach(function(e){if(e.to===v&&D[u]==null){D[u]=D[v]+1;Q.push(u)}})})}return D}
@@ -134,7 +145,7 @@ function Planner(day){
   function stayUntil(st,t){var T=hm(t),pl=plan(st,{leaveAt:T});if(ok(pl))return '待到 '+t+' 可以。'+(pl.rows[1]&&pl.rows[1].ride?'之後搭 '+fmt(pl.rows[1].ride.dep)+' 的'+pl.rows[1].ride.how+'。':'');
     if(pl.issues.length){var s4=JSON.parse(JSON.stringify(st));s4.t=T;s4.done[st.here]=1;s4.here=null;var rx=relax(s4);return '待到 '+t+' 的話：「'+pl.issues[0].it.name+'」'+pl.issues[0].why+'。'+(rx.length?'要這樣做的話：'+rx[0].say+'。':'用現有資料排不出解法。'+((rx.fail||[])[0]||''))}
     return '待到 '+t+' 之後算不出來：'+P[pl.unknown.from]+' → '+P[pl.unknown.it.place]+(pl.unknown.partial?' 已知的班次都過了。':' 沒有資料。')}
-  return {plan:plan,hard:hard,limits:limits,latest:latest,relax:relax,brief:brief,early:early,goto:goto,stayUntil:stayUntil,ok:ok}}
+  return {plan:plan,hard:hard,limits:limits,latest:latest,relax:relax,brief:brief,early:early,goto:goto,stayUntil:stayUntil,ok:ok,onboard:onboard,hopAt:hopAt}}
 /* L1 自動判斷位置：用定位＋時間判斷人在哪。純函式，app 和 node 測試共用。
    D＝套用開關後的那一天；o＝{now 分鐘, gps:{ll:[緯,經],acc 公尺,age 秒}｜null, fix 使用者的修正 {at,here,t}｜null,
      prev 上次判斷的結果｜null, done/drop/back：{項目id:1}（back＝使用者按了「加回來」）, P：Planner(D)（可省）}

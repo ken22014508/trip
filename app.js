@@ -159,7 +159,7 @@ function passedOrder(i,st){var P=PL[i],ids=DAYS[i].items.map(function(x){return 
 function target(i,row,now){if(!row)return null;var R=row.ride,walk=0,wh=[];
   if(R){for(var n=0;n<R.hops.length;n++){var h=R.hops[n];if(now!=null&&h.dep<now&&!h.walk){walk=0;wh=[];continue}if(h.walk){walk+=h.arr-h.dep;wh.push(h.how);continue}
     /* 前面那段有寫名字（例如騎車）：顯示時用它的名字，不說「走過去」 */
-    return {time:h.dep,what:h.how,where:pname(i,h.from),place:h.from,walk:walk,wname:wh.length===1&&!/^走路 /.test(wh[0])?wh[0]:null,last:h.last,fixed:h.fixed}}}
+    return {time:h.dep,what:h.how,where:pname(i,h.from),place:h.from,walk:walk,wname:wh.length===1&&!/^走路 /.test(wh[0])?wh[0]:null,last:h.last,fixed:h.fixed,board:h.ex&&h.ex.board,to:h.to}}}
   if(row.it.at)return {time:TripPlanner.hm(row.it.at),what:row.it.name,where:pname(i,row.it.place),place:row.it.place,walk:walk,arrive:1};
   return {free:1,walk:walk,arr:row.arr,what:row.it.name,place:row.it.place}}
 function hopsTxt(R){return R?R.hops.map(function(h){return h.walk?h.how:fmt(h.dep)+' '+h.how}).join(' → '):''}
@@ -320,6 +320,7 @@ IC.lock='<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0
 IC.undo='<path d="M4 9h10a5 5 0 0 1 0 10h-3"/><path d="M8 5L4 9l4 4"/>';IC.desk='<rect x="4" y="5" width="16" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>';
 IC.note='<path d="M5 4h14v16H5z"/><path d="M9 9h6M9 13h6"/>';IC.alt='<path d="M4 7h9a4 4 0 0 1 4 4v9"/><path d="M4 7l4-4M4 7l4 4M4 17h5"/>';
 IC.layers='<path d="M12 4l9 5-9 5-9-5z"/><path d="M3 14l9 5 9-5"/>';IC.chat='<path d="M5 5h14v10H9l-4 4z"/>';
+IC.map='<circle cx="6" cy="5" r="2.200"/><circle cx="18" cy="19" r="2.200"/><path d="M6 7.200v3.800a3 3 0 0 0 3 3h6a3 3 0 0 1 3 3v-.200"/>';IC.info='<circle cx="12" cy="12" r="9"/><path d="M12 11v5.500M12 7.600v.01"/>';
 IC.sos='<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.500v.01"/>';IC.people='<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.300 2.700-6 6-6s6 2.700 6 6"/><circle cx="17" cy="9" r="2.300"/><path d="M15.500 14.200c3 .2 5.500 2.600 5.500 5.800"/>';
 function rem(m){m=Math.max(0,Math.round(m));return m<60?m+' 分':Math.floor(m/60)+':'+p2(m%60)}
 function vib(p){try{if(navigator.vibrate)navigator.vibrate(p||8)}catch(e){}}
@@ -438,7 +439,7 @@ function mainBtn(m){if(m.wi&&!wdrag)return '<button class="gb2" data-wi="no">'+i
 /* 沒有可靠的位置（照時間推估，或定位離行程超過 1.5 公里）時，主角改成不靠位置的資訊：下一個有時間的期限 */
 function nextDue(m){var rows=m.pl?m.pl.rows.slice(m.st.here?1:0):[];
   for(var n=0;n<rows.length;n++){var r=rows[n];
-    if(r.ride)for(var q=0;q<r.ride.hops.length;q++){var h=r.ride.hops[q];if(!h.walk&&h.dep>=m.now)return {t:h.dep,place:h.from,what:h.how,ride:1}}
+    if(r.ride)for(var q=0;q<r.ride.hops.length;q++){var h=r.ride.hops[q];if(!h.walk&&h.dep>=m.now)return {t:h.dep,place:h.from,what:h.how,ride:1,board:h.ex&&h.ex.board}}
     if(r.it.at&&hm(r.it.at)>=m.now)return {t:hm(r.it.at),place:r.it.place,what:r.it.name}}
   return null}
 function vNow(){var m=vmOf(cur),o=say(m),tg=m.tg,body=dial(o.frac,esc(o.dlab||o.lab),bigOf(o),esc(o.dstat||o.status)),how='',J=m.st.J,i=m.i;
@@ -447,14 +448,14 @@ function vNow(){var m=vmOf(cur),o=say(m),tg=m.tg,body=dial(o.frac,esc(o.dlab||o.
   if(due){var lf=due.t-m.now,atDue=due.place===J.at&&(m.st.here||!moving(m));o.st=lf<10?'tight':'go';o.ref='';
     body=dial(Math.max(.04,lf/120),esc(due.ride?(atDue?'最晚搭':'最晚到'+pname(i,due.place).slice(0,6)+'搭'):'幾點前要到'),roll(fmt(due.t)),esc('還有 '+rem(lf)))
       /* 期限就在現在這個地點（例如在山六醬油等預約的計程車）：不叫你導航去自己在的地方 */
-      +(atDue?'<div class="ref due">最晚 '+fmt(due.t)+' 在這裡搭'+esc(due.what)+'</div>'
-       :'<div class="ref due">最晚 '+fmt(due.t)+' 要到'+esc(due.ride?pname(i,due.place)+'搭'+due.what:due.what)+'</div>'
+      +(atDue?'<div class="ref due">最晚 '+fmt(due.t)+' 在這裡搭'+esc(due.what)+'</div>'+boardLine(due.board)
+       :'<div class="ref due">最晚 '+fmt(due.t)+' 要到'+esc(due.ride?pname(i,due.place)+'搭'+due.what:due.what)+'</div>'+boardLine(due.board)
        +'<a class="bind" href="'+navTo(i,due.place)+'" target="_blank" rel="noopener">'+ico('nav')+'用 Google Maps 去'+esc(pname(i,due.place))+ico('chev')+'</a>')}
   else if(m.kind==='conf'||m.kind==='gap')body='<div class="alert"><span class="lab">'+esc(o.lab)+'</span><b>'+esc(o.big)+'</b><span class="why">'+esc(o.status)+'</span>'+(m.lost.length?'<span class="why">去不了了：'+esc(names(m.lost))+'</span>':'')+'</div>'+fixOpts(m);
   else if(!m.wi&&m.next&&m.next.ride&&m.next.arr>m.now){
     /* 「怎麼去」就是圓環下面這一條：寫著要在哪裡搭什麼，點了看每一段和導航 */
     how=tg&&!tg.free&&!tg.arrive?ico(tg.fixed?'lock':'train')+esc(tg.what)+'　在'+esc(tg.where)+'搭':ico('walk')+'怎麼去「'+esc(m.next.it.name)+'」';
-    body+='<button class="bind" data-sheet="route">'+how+ico('chev')+'</button>'}
+    body+='<button class="bind" data-sheet="route">'+how+ico('chev')+'</button>'+(tg&&!tg.free&&!tg.arrive?nextBoard(m,tg):'')}
   if(!m.wi&&m.kind!=='conf'&&m.kind!=='gap'&&o.ref)body+='<div class="ref">'+esc(o.ref)+'</div>';
   var btn=mainBtn(m),acts=btn?'<div class="acts">'+btn+'</div>':'';
   var extra=(m.kind==='here'||m.kind==='move')&&!m.wi?lostLine(m):'';
@@ -467,7 +468,16 @@ function vNow(){var m=vmOf(cur),o=say(m),tg=m.tg,body=dial(o.frac,esc(o.dlab||o.
   /* 注意事項（11/22 Ken）：計畫有變上面一顆按鈕，點了跳出「這裡／接下來／今天」的提醒；沒有提醒時不顯示 */
   var tn=m.wi||wdrag?0:tipGroups(m).reduce(function(s,g){return s+g.a.length},0);
   var tipb=tn?'<button class="askbar tipbar" data-sheet="tips">'+ico('note')+'<span>注意事項</span><i class="cnt num">'+tn+'</i>'+ico('chev')+'</button>':'';
-  return '<section class="stage one '+o.st+'">'+head(m)+geoAsk()+body+acts+extra+tipb+ask+'</section>'}
+  /* 路線圖（11/28 Ken）：今天接下來還有車要搭才出現，跟注意事項並排（不多佔一行） */
+  var mapb=!m.wi&&!wdrag&&(m.kind==='here'||m.kind==='move')&&hasRide(m)?'<button class="askbar mapbar" data-sheet="route">'+ico('map')+'<span>路線圖</span>'+ico('chev')+'</button>':'';
+  var bars=mapb&&tipb?'<div class="bar2">'+mapb+tipb+'</div>':mapb+tipb;
+  return '<section class="stage one '+o.st+'">'+head(m)+geoAsk()+body+acts+extra+bars+ask+'</section>'}
+/* 怎麼搭（11/28）：資料的 board，接在「在哪裡搭什麼」下面一行 */
+function boardLine(b){return b?'<div class="ref board">'+ico('info')+'<span>'+qwrap(esc(b))+'</span></div>':''}
+/* 人已經在搭車的那一站、期限是比較晚的那班（例如松山站：最晚搭 19:32，但 16:27 就有一班）：寫下一班怎麼搭，不寫最晚那班的 */
+function nextBoard(m,tg){var J=m.st.J,nh=J&&J.at===tg.place&&tg.to?PL[m.i].hopAt(tg.place,tg.to,m.now):null;
+  if(nh&&!nh.walk&&nh.dep<tg.time&&nh.ex&&nh.ex.board)return boardLine(fmt(nh.dep)+' 那班：'+nh.ex.board);
+  return boardLine(tg.board)}
 /* 提醒：項目的 tips 和當天的 tips；每條是字串，或 {t, show}（跟著開關顯示） */
 function tipList(x){return (x&&x.tips||[]).filter(function(t){return typeof t==='string'||shown(t)}).map(function(t){return typeof t==='string'?t:t.t})}
 /* 現在用得到的提醒：人在的那一項、接下來要去的那一項、整天的。
@@ -483,8 +493,68 @@ function dayOver(m){return m.kind==='end'||(m.kind==='here'&&!m.next)}
 /* 明天：幾點從哪裡出門、第一班車（照原訂排一次）、明天整天的提醒。最後一天沒有明天 */
 function tomorrowTips(i){var j=i+1;if(j>=DAYS.length)return null;var D=DAYS[j],out=[D.start+' 從'+pname(j,D.startAt)+'出門'],h0=null;
   PL[j].plan({at:D.startAt,t:hm(D.start),here:null,done:{},drop:{},cut:{},ext:{}}).rows.some(function(r){return r.ride&&r.ride.hops.some(function(h){if(!h.walk){h0=h;return true}return false})});
-  if(h0)out.push('第一班車：'+fmt(h0.dep)+' 在'+pname(j,h0.from)+'搭'+h0.how);
+  if(h0)out.push('第一班車：'+fmt(h0.dep)+' 在'+pname(j,h0.from)+'搭'+h0.how+(h0.ex&&h0.ex.board?'（'+h0.ex.board+'）':''));
   return {h:'明天：'+D.name+'（'+dlabel(j)+'）',a:out.concat(tipList(D))}}
+
+/* ---------- 路線圖（11/28 Ken：「最好有一個鈕可以讓我看到像 JR 的路線圖，這樣我更能明白要去哪」） ----------
+   今天接下來的路畫成一條直的路線：顏色＝路線（資料的 color；沒寫就照交通工具），大圓＝上下車、換車的站，小圓＝其他地點，
+   白點＝中間停的站（資料的 stops），虛線＝走路。最上面是現在；在車上時「你在這裡」照時間畫在兩站之間。
+   每段車寫怎麼搭（board）。資料沒寫 stops 的路段只畫上下車兩站。 */
+var MODE_C=[[/船|渡輪|フェリー|高速艇/,'#1F95D3'],[/巴士|バス/,'#2E9C58'],[/纜車|ロープウェイ|ケーブル|吊椅|リフト/,'#9A5BD1'],[/路面|市電|電車到|トラム/,'#DE9330'],[/計程車|タクシー/,'#C99A00']];
+/* 沒寫 color 的車：船、巴士、纜車、路面電車、計程車照交通工具；火車照路線名固定挑一個顏色（同一條線每天都同色，不同線分得出來） */
+var LINE_C=['#3C7CDB','#E0712C','#2E9C58','#C2408A','#7A5BD1','#C99A00','#1C9AAA'];
+function lineC(h){if(h.ex&&h.ex.color)return h.ex.color;var ln=(h.ex&&h.ex.line)||'',s=ln+' '+h.how;for(var n=0;n<MODE_C.length;n++)if(MODE_C[n][0].test(s))return MODE_C[n][1];
+  if(!ln)return LINE_C[0];var k=0;ln=ln.replace(/（.*$|\(.*$/,'');for(n=0;n<ln.length;n++)k=(k*37+ln.charCodeAt(n))%9973;return LINE_C[k%LINE_C.length]}
+/* 「…」裡的字不要被拆到兩行（看板上的字要一眼看完整） */
+function qwrap(s){return s.replace(/「[^」]{1,18}」/g,function(x){return '<span class="nw">'+x+'</span>'})}
+/* 走路（沒有寫交通工具名字的 walk）；寫了名字的 walk（例如路面電車 約 25 分）當成車畫 */
+function plainWalk(h){return !!h.walk&&/^走路 /.test(h.how)}
+function hasRide(m){var J=m.st.J;if(J&&J.route&&m.kind==='move')return true;
+  return (m.pl?m.pl.rows:[]).some(function(r){return r.ride&&r.ride.hops.some(function(h){return !plainWalk(h)&&h.arr>m.now})})}
+/* 站（N）和每一段（E[k]＝N[k]→N[k+1]）；me＝你在哪：{n:第幾站} 或 {e:第幾段, f:走了幾成} */
+function mapSeq(i,m){var rows=m.pl?m.pl.rows:[],J=m.st.J,N=[],E=[],me=null,now=m.now,k;
+  /* 定位說在車上：引擎從下車那站排起，這一段不在 rows 裡，補回來 */
+  if(J&&J.route&&m.kind==='move'){var h0=PL[i].onboard(J.route.from,J.route.to,now);if(h0&&h0.arr>now){N.push({p:h0.from,t:h0.dep,its:[],past:1});E.push(h0);N.push({p:h0.to,t:h0.arr,its:[]});me={e:0,f:(now-h0.dep)/Math.max(1,h0.arr-h0.dep)}}}
+  if(!N.length)N.push({p:m.st.here&&rows[0]?rows[0].it.place:(rows[0]&&rows[0].from)||m.st.at,t:null,its:[]});
+  rows.forEach(function(r){if(r.ride)r.ride.hops.forEach(function(h){E.push(h);N.push({p:h.to,t:h.arr,its:[]})});var L=N[N.length-1];if(L.p===r.it.place)L.its.push(r)});
+  if(!me){if(m.st.here)me={n:0};else for(k=0;k<E.length;k++){var h=E[k];if(h.arr>now){me=h.dep<=now?{e:k,f:(now-h.dep)/Math.max(1,h.arr-h.dep)}:{n:k};break}}}
+  if(!me)me={n:N.length-1};
+  /* 引擎從「現在」排，第一段走路的出發時間就是現在：剛要出發還算在出發的那一站，不畫在路上 */
+  if(me.e!=null&&me.f<.05&&!N[me.e].past)me={n:me.e};
+  if(me.n===0&&N[0].t==null)N[0].now=1;
+  return {N:N,E:E,me:me}}
+function routeMap(i,m){var Q=mapSeq(i,m),N=Q.N,E=Q.E,me=Q.me,now=m.now,h='',J=m.st.J,gps=J&&(J.src==='gps'||J.src==='user'),firstR=-1,firstW=-1,k;
+  for(k=0;k<E.length;k++){if(E[k].arr<=now)continue;if(firstR<0&&!plainWalk(E[k]))firstR=k;if(firstW<0&&plainWalk(E[k])&&k<=(firstR<0?k:firstR))firstW=k}
+  var big=function(k){return (k>0&&!plainWalk(E[k-1]))||(k<E.length&&!plainWalk(E[k]))};
+  var meRow=function(txt,c){return '<div class="r you" style="--lc:'+c+'"><span class="t"></span><span class="k"><i></i></span><div class="c">'+esc(txt)+'</div></div>'};
+  N.forEach(function(nd,k){var ein=k>0?E[k-1]:null,eo=k<E.length?E[k]:null,isMe=me.n===k;
+    var lc=function(e){return e?(plainWalk(e)?'transparent':lineC(e)):'transparent'},cls='r n'+(big(k)?'':' sm')+(ein&&plainWalk(ein)?' wa':'')+(eo&&plainWalk(eo)?' wb':'')+(isMe?' at':'')+(nd.past?' past':'');
+    /* 這站要做的事（景點、吃飯）：名字跟站名一樣就只寫待多久；沒有要做的事、前後都是車才叫「換車」 */
+    var its=nd.its.filter(function(r){return !/^回/.test(r.it.name)}).map(function(r){var st=r.leave-r.arr,s2=st>=5&&r.it.kind!=='wall'?dur(st):'';
+      return r.it.name===pname(i,nd.p)?(s2?'待 '+s2:''):esc(r.it.name)+(s2?'（'+s2+'）':'')}).filter(Boolean).join('、');
+    var xf=ein&&eo&&!plainWalk(ein)&&!plainWalk(eo)&&!nd.its.length,wt=xf?eo.dep-ein.arr:0;
+    var link=(k===(firstR>=0?firstR:-1)&&!nd.past)?'<a class="mini" href="'+navTo(i,nd.p)+'" target="_blank" rel="noopener">搭車處</a>':'';
+    h+='<div class="'+cls+'" style="--la:'+lc(ein)+';--lb:'+lc(eo)+';--nc:'+(eo&&!plainWalk(eo)?lineC(eo):ein&&!plainWalk(ein)?lineC(ein):'currentColor')+'">'
+      +'<span class="t">'+(nd.now?'現在':nd.t!=null?fmt(nd.t):'')+'</span><span class="k"><i></i></span>'
+      +'<div class="c"><b>'+esc(pname(i,nd.p))+'</b>'+(isMe?'<em class="here">'+(gps?'你在這裡':'照時間：在這裡')+'</em>':'')
+      +(xf?'<span class="xf">換車'+(wt>0?' '+dur(wt):'')+'</span>':'')+(its?'<span>'+its+'</span>':'')+link+'</div></div>';
+    if(!eo)return;
+    var w=plainWalk(eo),c=w?'currentColor':lineC(eo),x=eo.ex||{},S0=x.stops||[],ms=me.e===k?me.f:null;
+    if(w){h+='<div class="r e w"><span class="t"></span><span class="k"></span><div class="c"><span class="wk">'+ico('walk')+esc(eo.how)+(eo.est?'（估）':'')+'</span>'
+        +(k===firstW&&eo.arr>now?'<a class="mini" href="'+navTo(i,eo.to)+'" target="_blank" rel="noopener">導航</a>':'')+'</div></div>';
+      if(ms!=null)h+=meRow(gps?'你在這裡':'照時間：大約在這裡','transparent').replace('class="r you"','class="r you w"');return}
+    h+='<div class="r e" style="--lc:'+c+'"><span class="t">'+fmt(eo.dep)+'<small>開</small></span><span class="k"></span><div class="c">'
+      +(x.line?'<i class="ln" style="background:'+c+'">'+esc(x.line)+'</i>':'')+'<b>'+esc(eo.how)+'</b>'+(eo.est?'<i class="tg">估</i>':'')
+      +(x.board?'<span class="brd">'+ico('info')+'<span>'+qwrap(esc(x.board))+'</span></span>':'')+'</div></div>';
+    /* 中間停的站；「你在這裡」插在照時間（站有寫時間就照站的時間）算出來的位置 */
+    var at=-1;if(ms!=null){var timed=S0.length&&S0.every(function(s){return Array.isArray(s)});
+      at=timed?S0.filter(function(s){return hm(s[1])<=now}).length:Math.min(S0.length,Math.floor(ms*(S0.length+1)))}
+    var stopRow=function(s){var nm=Array.isArray(s)?s[0]:s,tt=Array.isArray(s)?s[1]:'';return '<div class="r s" style="--lc:'+c+'"><span class="t">'+esc(tt)+'</span><span class="k"><i></i></span><div class="c">'+esc(nm)+'</div></div>'};
+    var long=S0.length>8&&ms==null&&k!==firstR,inner='';
+    S0.forEach(function(s,n){if(n===at)inner+=meRow(gps?'你在這裡':'照時間：大約在這裡',c);inner+=stopRow(s)});
+    if(at>=S0.length)inner+=meRow(gps?'你在這裡':'照時間：大約在這裡',c);
+    h+=long?'<details class="rs" style="--lc:'+c+'"><summary class="r s"><span class="t"></span><span class="k"><i></i></span><div class="c">經過 '+S0.length+' 站</div></summary>'+inner+'</details>':inner});
+  return '<div class="rmap">'+h+'</div>'}
 
 /* ---------- 行程 ---------- */
 function hopsTxt(R){return R?R.hops.map(function(h){return h.walk?h.how:fmt(h.dep)+' '+h.how}).join(' → '):''}
@@ -671,11 +741,11 @@ function sheetHtml(){if(!sh)return '';var i=cur,D=DAYS[i],h='';
     h+='<div class="grid"><a class="gb" href="'+navTo(i,it.place)+'" target="_blank" rel="noopener">'+ico('nav')+'導航</a>'
      +(dn?'<button class="gb" data-undo="'+it.id+'">'+ico('undo')+'還沒去</button>':dr?'<button class="gb" data-chg="undrop" data-id="'+it.id+'">'+ico('undo')+'加回來</button>':'<button class="gb" data-chg="drop" data-id="'+it.id+'">'+ico('skip')+'不去了</button>')+'</div>';
     return h}
-  if(sh.t==='route'){var mr=vmOf(i),nx=mr.next;if(!nx||!nx.ride)return '<div class="st">怎麼去</div><p class="sub">這段沒有路線資料</p>';
-    h='<div class="ty">怎麼去</div><div class="st">'+esc(nx.it.name)+'</div>';
-    nx.ride.hops.forEach(function(hp){h+='<div class="hop'+(hp.walk?' walk':'')+'"><div class="hl"><b class="num">'+(hp.walk?'':fmt(hp.dep))+'</b><span>'+(hp.walk?'':fmt(hp.arr)+' 到')+'</span></div><div class="hb"><b>'+esc(hp.how)+(hp.est?'（估）':'')+'</b><span>'+esc(pname(i,hp.from))+' → '+esc(pname(i,hp.to))+'</span></div>'
-      +'<a class="mini" href="'+navTo(i,hp.walk?hp.to:hp.from)+'" target="_blank" rel="noopener">'+(hp.walk?'導航':'搭車處')+'</a></div>'});
-    return h+'<div class="grid one"><a class="gb" href="'+transitUrl(i,nx.it.place)+'" target="_blank" rel="noopener">'+ico('nav')+'Google Maps 路線</a></div>'}
+  /* 怎麼去 → 路線圖（11/28）：圓環下面那條和「路線圖」按鈕都開這裡。今天接下來的路一站一站畫出來，下一段的搭車處、導航連結在圖裡 */
+  if(sh.t==='route'){var mr=vmOf(i),nx=mr.next,rm=(mr.kind==='here'||mr.kind==='move')&&nx?routeMap(i,mr):'';
+    if(!rm)return '<div class="ty">路線圖</div><div class="st">今天接下來沒有要搭的車</div>';
+    return '<div class="ty">路線圖</div><div class="st">今天接下來</div>'+rm
+      +'<div class="grid one"><a class="gb" href="'+transitUrl(i,nx.it.place)+'" target="_blank" rel="noopener">'+ico('nav')+'Google Maps 路線</a></div>'}
   if(sh.t==='members'){h='<div class="st">成員和分組</div><p class="sub">同一組的人結清時算一個單位，例如同房或一家人。</p>';
     S.mem.forEach(function(x){h+='<div class="mrow"><input type="text" value="'+esc(x.n)+'" data-mid="'+x.id+'" aria-label="名字"><div class="chips">'+[0,1,2,3].map(function(g){return '<button class="chip'+(x.g===g?' on':'')+'" data-grp="'+x.id+':'+g+'" aria-pressed="'+(x.g===g)+'">'+(g?'第'+g+'組':'不分組')+'</button>'}).join('')+'</div>'
       +(memUsed(x.id)?'':'<button class="ib sm" data-delm="'+x.id+'" aria-label="移除 '+esc(x.n)+'">'+ico('x')+'</button>')+'</div>'});
@@ -746,9 +816,13 @@ function dropFx(btn){var br=btn.getBoundingClientRect(),p=lastPt&&Date.now()-las
 function mkOld(){var o=app.cloneNode(true);o.classList.add('xold');o.setAttribute('aria-hidden','true');
   o.querySelectorAll('[id]').forEach(function(e){e.removeAttribute('id')});o.querySelectorAll('.burst').forEach(function(e){e.classList.remove('burst')});
   app.parentNode.insertBefore(o,app.nextSibling);o.scrollTop=app.scrollTop;document.body.classList.add('xfade');return o}
-/* 兩圈換頁（D3 定案）：外圈 Ro 洗掉舊頁、內圈 Rn＝(t−GAP)×波速 帶出新頁，中間一圈空帶只有天空和水波，新舊兩頁不會碰在一起。
-   舊頁複本：Ro 外看得到；新頁 #app：Rn 內看得到。sky.js 的玻璃用同樣兩圈（Sky.wave）。 */
-var WAVE_GAP=.32,WAVE_E=18,BOB_W=60,BOB_A=6,BOB_B=.04;
+/* 換頁（11/28 改）：水波第一圈只折射舊頁；第二圈（晚 WAVE_GAP 秒，sky.js 同一個數）經過的地方換成新頁，R＝第二圈的半徑。
+   玻璃在 R 直接換成新頁的（一直都有玻璃，被那一圈的折射蓋住）；字在 R±WAVE_E 交叉淡入淡出。
+   WAVE_G＞0 會讓字在 R±G 那一窄條先消失（新舊不疊在一起），試過：兩頁一樣的字（轉盤的 12:30、標題）會被那一圈擦掉一下，所以用 0。
+   以前（D3）兩圈中間留一大圈空帶，沒有玻璃也沒有字，只有天空；11/28 Ken：「兩圈的中間是糊的」（白天多雲時整圈白白一片）。
+   換在第二圈不換在第一圈：按「走了」時轉盤先閃 260ms 才換內容，換在第一圈會一開始就整塊跳出新頁。
+   舊頁複本：R+G 外看得到；新頁 #app：R−G 內看得到。sky.js 用 Sky.wave(x,y,R,G)。 */
+var WAVE_GAP=.32,WAVE_G=0,WAVE_E=10,BOB_W=60,BOB_A=6,BOB_B=.04;
 /* 轉場效果（「更多 → 點版號」的檢查畫面切換）：cut＝只有兩圈；bob＝甲案，字被波抬起來；gl＝乙案（預設），轉盤的字畫進 WebGL、其他照甲案 */
 function fxMode(){return S.fx||'gl'}
 /* 甲案：找出一層裡要動的單位（區塊；轉盤只動 .lab、.rem 和大字的每一個字），量好中心存起來 */
@@ -788,12 +862,12 @@ function waveFx(fx,old){if(!old)return;var E=WAVE_E,far=0;[[0,0],[innerWidth,0],
   var clr=function(el){el.style.webkitMaskImage='';el.style.maskImage=''},done=false,
     gd=fxMode()==='gl'?glDial(old,app):null,bob=fxMode()!=='cut',UO=bob?bobUnits(old,!!gd):[],UN=bob?bobUnits(app,!!gd):[],
     to=0,end=function(){if(done)return;done=true;clearTimeout(to);if(waveEnd===end)waveEnd=null;if(window.Sky&&Sky.pre)Sky.pre(null);clr(app);bobClear(UN);if(gd)gd.done();if(old.parentNode)old.remove();document.body.classList.remove('xfade');if(window.Sky&&Sky.wave)Sky.wave(null)},
-    frame=function(){var t=(performance.now()-fx.t0)/1000,Ro=t*fx.v,Rn=Math.max(0,t-WAVE_GAP)*fx.v;
-      waveMask(old,fx.x,fx.y,'transparent '+Math.max(0,Ro-E).toFixed(1)+'px, #000 '+(Ro+E).toFixed(1)+'px');
-      if(Rn<=0){app.style.webkitMaskImage=app.style.maskImage='linear-gradient(transparent,transparent)'}
-      else waveMask(app,fx.x,fx.y,'#000 '+Math.max(0,Rn-E).toFixed(1)+'px, transparent '+(Rn+E).toFixed(1)+'px');
-      if(bob){bobFrame(UO,fx.x,fx.y,Ro);bobFrame(UN,fx.x,fx.y,Rn)}
-      if(window.Sky&&Sky.wave)Sky.wave(fx.x,fx.y,Ro,Rn);return Rn-E>far};
+    frame=function(){var t=(performance.now()-fx.t0)/1000,R=Math.max(0,t-WAVE_GAP)*fx.v,a=R+WAVE_G,b=R-WAVE_G;
+      if(R<=0)clr(old);else waveMask(old,fx.x,fx.y,'transparent '+Math.max(0,a-E).toFixed(1)+'px, #000 '+(a+E).toFixed(1)+'px');
+      if(b+E<=0){app.style.webkitMaskImage=app.style.maskImage='linear-gradient(transparent,transparent)'}
+      else waveMask(app,fx.x,fx.y,'#000 '+Math.max(0,b-E).toFixed(1)+'px, transparent '+(b+E).toFixed(1)+'px');
+      if(bob){bobFrame(UO,fx.x,fx.y,R);bobFrame(UN,fx.x,fx.y,R)}
+      if(window.Sky&&Sky.wave)Sky.wave(fx.x,fx.y,R,WAVE_G);return b-E>far};
   frame(); /* 跟換 innerHTML 同一段：新頁一開始就全遮，不會先閃一下 */
   if(gd&&Sky.draw)Sky.draw(); /* 轉盤的字剛從 DOM 藏起來，GL 這一刻就畫上 */
   /* sky.js 的 loop 每一幀在畫之前叫 tick，GL 和遮罩同一幀更新；自己的 rAF 也跑當保險（loop 停了也不會卡在半路）。兩邊都用當下時間算，重複叫沒關係 */
